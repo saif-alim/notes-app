@@ -1,8 +1,16 @@
 module(name = "notes_app", version = "0.0.1")
 
-# Bazel rulesets — versions pinned in Phase 3 after smoke-test
-bazel_dep(name = "rules_rust", version = "")
-bazel_dep(name = "rules_apple", version = "")
-bazel_dep(name = "rules_swift", version = "")
-bazel_dep(name = "rules_xcodeproj", version = "")
-bazel_dep(name = "rules_proto", version = "")
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "platforms", version = "1.0.0")
+
+# Rust backend (services/api) — extensions wired in Phase 5
+bazel_dep(name = "rules_rust", version = "0.70.0")
+
+# iOS app (apps/ios) — extensions wired in Phase 7
+bazel_dep(name = "apple_support", version = "2.2.0")
+bazel_dep(name = "rules_swift", version = "3.6.1")
+bazel_dep(name = "rules_apple", version = "4.5.3")
+bazel_dep(name = "rules_xcodeproj", version = "4.0.1")
+
+# Shared proto schema (libs/schema) — extensions wired in Phase 4
+bazel_dep(name = "rules_proto", version = "7.1.0")

@@ -48,6 +48,25 @@ Single source of truth: `libs/schema/notes.proto`. Codegen via Bazel:
 
 Adding a field: edit `.proto`, regenerate, update handlers/views.
 
+## iOS Build Path Decision (Phase 3)
+
+**Decision: Plan A — `rules_xcodeproj` 4.0.1**
+
+Smoke test passed: `bazel build //apps/ios:NotesXcodeProj` succeeded on first valid attempt with Bazel 9.1.0 + Bzlmod. rules_xcodeproj generates the Xcode project from the Bazel graph; Xcode is a viewer, not the source of truth.
+
+| Option | Result |
+|--------|--------|
+| Plan A (`rules_xcodeproj` 4.0.1) | ✅ Passed — `NotesXcodeProj-runner.sh` emitted, 11 actions, 3s |
+| Plan B (`sh_binary` wrapping `xcodebuild`) | Not needed |
+
+**Rationale:** Single-screen SwiftUI app is well within rules_xcodeproj scope. Known issues (Xcode version sync, scheme generation) have documented workarounds. Plan B remains available if Phase 7 reveals blockers — keeping MODULE.bazel deps, just swapping the target rule (~1hr cost).
+
+**Toolchain resolved:**
+- Bazel 9.1.0 (via Bazelisk)
+- rules_xcodeproj 4.0.1
+- rules_apple 4.5.3 + rules_swift 3.6.1 + apple_support 2.2.0
+- All modules on BCR, Bzlmod-resolved
+
 ## Tradeoffs
 
 | Aspect | Choice | Why | Alternative |
@@ -55,6 +74,7 @@ Adding a field: edit `.proto`, regenerate, update handlers/views.
 | Storage | In-memory RwLock | Zero setup, pluggable trait | SQLite (Phase 4) |
 | API | REST JSON | Simple, tools-friendly | gRPC (later phase) |
 | Build | Bazel (Bzlmod) | Unified mono-repo, rules_proto | xcodebuild + cargo separate |
+| iOS build | rules_xcodeproj (Plan A) | Bazel is source of truth for iOS graph | sh_binary wrapping xcodebuild (Plan B) |
 | iOS framework | SwiftUI | Modern, least boilerplate | UIKit (more code) |
 | Backend | Axum + Tokio | Best ergonomics, ecosystem | Actix (more friction) |
 
