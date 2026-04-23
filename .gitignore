@@ -1,0 +1,45 @@
+# Claude Code local overrides (agents/hooks/settings.json stay committed)
+.claude/settings.local.json
+.claude/worktrees/
+
+# Bazel output symlinks
+/bazel-*
+
+# Rust
+target/
+**/*.rs.bk
+Cargo.lock
+
+# Swift / Xcode
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+Package.resolved
+
+# Proto codegen (generated, checked via codegen rule)
+**/gen/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Logs / tmp
+*.log
+tmp/
