@@ -6,6 +6,7 @@ swift_library(
     name = "NotesLib",
     srcs = glob(["Sources/**/*.swift"]),
     tags = ["manual"],
+    visibility = ["//visibility:public"],
 )
 
 ios_application(
@@ -15,6 +16,7 @@ ios_application(
     infoplists = ["Info.plist"],
     minimum_os_version = "17.0",
     tags = ["manual"],
+    visibility = ["//visibility:public"],
     deps = [":NotesLib"],
 )
 
