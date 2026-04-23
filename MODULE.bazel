@@ -13,5 +13,9 @@ bazel_dep(name = "rules_apple", version = "4.5.3")
 bazel_dep(name = "rules_xcodeproj", version = "4.0.1")
 
 # Shared proto schema (libs/schema)
+#   .proto is source of truth for both languages.
+#   Rust: prost-generated via rules_rust_prost (Bazel-native).
+#   Swift: hand-written Codables mirroring .proto fields — see retrospective
+#   Phase 4 entry for why (rules_proto_grpc_swift chain not Bazel 9 ready).
 bazel_dep(name = "rules_proto", version = "7.1.0")
 bazel_dep(name = "rules_rust_prost", version = "0.70.0")
