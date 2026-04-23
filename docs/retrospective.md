@@ -31,9 +31,16 @@
 - **What worked:** Splitting the plan into user-driven vs Claude-driven steps — installs that need interactive CLI don't block file moves / hook wiring.
 - **What to watch:** `.claude/worktrees/` gitignore rule prevents accidental commit of `/worktree` sandboxes. Re-check in Phase 3 when worktrees used for qa-engineer.
 
+### Phase 3 (Bazel bootstrap)
+- **Decision:** Plan A (rules_xcodeproj 4.0.1) confirmed — `bazel build //apps/ios:NotesXcodeProj` passed, project generated successfully.
+- **Blocker:** rules_xcodeproj BwB (Build with Bazel) mode creates `bazel-out/` paths inside Xcode's DerivedData with 0555 (read-only) permissions by design. Xcode cannot write Info.plist there. Full BwB fix requires replacing XCBBuildService (non-trivial, disproportionate to scope). `Package.swift` `.executableTarget` also attempted and failed — SPM doesn't produce a valid iOS app bundle (nil bundle ID at runtime).
+- **Decision (workaround):** `bazel build //apps/ios:NotesApp` produces a signed `.ipa`; `tools/run-ios-sim.sh` extracts and installs on simulator via `simctl`. Unblocks progress without adding scope. **Future work:** wire a hand-maintained `Notes.xcodeproj` (committed, not Bazel-generated) pointing at `Sources/` for Xcode IDE loop — this is the proper long-term solution for Phase 7+ development ergonomics.
+- **What worked:** Bazelisk + Bazel 9.1.0 installed cleanly. BCR module resolution resolved version bumps transparently (apple_support 1.22.1 → 2.2.0, etc.). Opus advisor correctly predicted Plan A viability + 3hr time-box; resolved in ~15min.
+- **Tradeoff recorded:** `docs/architecture.md` — iOS build path section.
+
 ## TODO: Fill in as phases progress
 
-- [ ] **Phase 3 (Bazel bootstrap):** rules_xcodeproj success/fallback decision.
+- [ ] **Phase 3 (Bazel bootstrap):** ✅ Done — see above.
 - [ ] **Phase 5 (Backend minimal):** Axum ergonomics, Tokio learning curve, NotesStore trait design.
 - [ ] **Phase 6 (Backend hardening):** tower middleware tuning, tracing setup, bench insights.
 - [ ] **Phase 7 (iOS minimal):** SwiftUI state management, APIClient pattern, codegen integration.

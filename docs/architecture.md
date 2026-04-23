@@ -50,16 +50,29 @@ Adding a field: edit `.proto`, regenerate, update handlers/views.
 
 ## iOS Build Path Decision (Phase 3)
 
-**Decision: Plan A — `rules_xcodeproj` 4.0.1**
+**Decision: Plan A — `rules_xcodeproj` 4.0.1 for project generation; direct Bazel + simctl for dev loop**
 
-Smoke test passed: `bazel build //apps/ios:NotesXcodeProj` succeeded on first valid attempt with Bazel 9.1.0 + Bzlmod. rules_xcodeproj generates the Xcode project from the Bazel graph; Xcode is a viewer, not the source of truth.
+`bazel build //apps/ios:NotesApp` produces a signed `.ipa` in 15s. Install + launch via simctl:
+
+```bash
+./tools/run-ios-sim.sh        # build, install, launch on available simulator
+```
+
+Or manually:
+```bash
+bazel build //apps/ios:NotesApp
+unzip -q bazel-bin/apps/ios/NotesApp.ipa -d /tmp/notes-ipa
+xcrun simctl install booted /tmp/notes-ipa/Payload/NotesApp.app
+xcrun simctl launch booted com.notes.app
+```
+
+`bazel run //apps/ios:NotesXcodeProj` generates `apps/ios/Notes.xcodeproj` for Xcode navigation/indexing, but build+run goes through Bazel. rules_xcodeproj BwB mode creates `bazel-out/` paths inside DerivedData with 0555 permissions; Xcode can't write there without setting up the Bazel build service (XCBBuildService replacement), which is disproportionate to this scope.
 
 | Option | Result |
 |--------|--------|
-| Plan A (`rules_xcodeproj` 4.0.1) | ✅ Passed — `NotesXcodeProj-runner.sh` emitted, 11 actions, 3s |
-| Plan B (`sh_binary` wrapping `xcodebuild`) | Not needed |
-
-**Rationale:** Single-screen SwiftUI app is well within rules_xcodeproj scope. Known issues (Xcode version sync, scheme generation) have documented workarounds. Plan B remains available if Phase 7 reveals blockers — keeping MODULE.bazel deps, just swapping the target rule (~1hr cost).
+| `bazel build //apps/ios:NotesApp` → simctl | ✅ App running, PID confirmed |
+| rules_xcodeproj BwB (Xcode ⌘R) | ❌ Permission denied on bazel-out paths |
+| `Package.swift` as SPM workaround | ❌ `.executableTarget` doesn't produce valid iOS bundle (nil bundle ID) |
 
 **Toolchain resolved:**
 - Bazel 9.1.0 (via Bazelisk)

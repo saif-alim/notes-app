@@ -16,7 +16,7 @@ bazel build //...
 bazel run //services/api
 
 # Run iOS app in simulator
-# Open apps/ios/Package.swift in Xcode, select simulator, run
+./tools/run-ios-sim.sh
 ```
 
 ## Repo Map
@@ -45,7 +45,7 @@ bazel test //apps/ios/...      # iOS tests only
 
 - In-memory storage only (Phase 4+: pluggable to SQLite/Postgres)
 - iOS app is simulator-only in Phase 1–2 (device testing in Phase 3+)
-- Bazel-iOS integration may fall back to xcodebuild wrapper if rules_xcodeproj resists (see Phase 3 decision)
+- iOS dev loop uses `tools/run-ios-sim.sh` (Bazel build + simctl); Xcode IDE integration planned for Phase 7
 
 ## Documentation
 

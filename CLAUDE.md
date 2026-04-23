@@ -27,7 +27,7 @@ bazel build //...               # build all
 bazel run //services/api        # start backend on :3000
 bazel test //...                # run all tests
 
-# iOS: open apps/ios/Package.swift in Xcode, run on simulator
+# iOS: ./tools/run-ios-sim.sh   (builds via Bazel, installs on simulator)
 ```
 
 ## How to add
