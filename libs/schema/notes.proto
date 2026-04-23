@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package notes.v1;
+
+// A single note. `id` is the server-assigned identifier; `body` is the free-form
+// text the user entered; `created_at_unix` is seconds since epoch (UTC).
+message Note {
+  string id = 1;
+  string body = 2;
+  int64 created_at_unix = 3;
+}
+
+// Response body for GET /notes.
+message ListNotesResponse {
+  repeated Note notes = 1;
+}
+
+// Request body for POST /notes.
+message CreateNoteRequest {
+  string body = 1;
+}
+
+// Response body for POST /notes.
+message CreateNoteResponse {
+  Note note = 1;
+}

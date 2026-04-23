@@ -1,1 +1,7 @@
-# Proto schema package — wired in Phase 4
+load("@rules_proto//proto:defs.bzl", "proto_library")
+
+proto_library(
+    name = "notes_proto",
+    srcs = ["notes.proto"],
+    visibility = ["//visibility:public"],
+)
