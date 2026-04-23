@@ -22,9 +22,17 @@
 - **Blocker:** None.
 - **What worked:** Bazel MODULE.bazel + .bazelrc stubs minimal and clear.
 
+### Phase 2 (Agent tooling)
+- **Discovery:** codebase-memory-mcp + caveman already installed user-globally; cbm-code-discovery-gate + cbm-session-reminder hooks pre-wired. Only rtk + context-mode were net-new.
+- **Decision:** Commit `.claude/agents/`, `.claude/commands/`, `.claude/hooks/`, `.claude/settings.json` — keep only `settings.local.json` and `worktrees/` local. Reviewer gets same toolchain on clone.
+- **Decision:** Doc-freshness hook non-blocking (exit 0 always). Hard fail too noisy given many edits legitimately don't need doc updates.
+- **Install friction:** rtk via brew one-shot. context-mode via `/plugin marketplace add mksglu/context-mode` + `/plugin install` + restart. Both smooth.
+- **Verified:** rtk 0.37.2, 61.3% token savings on 12 commands. codebase-memory-mcp indexed scaffold (45 nodes, 44 edges, `fast` mode — baseline for Phase 3+ growth).
+- **What worked:** Splitting the plan into user-driven vs Claude-driven steps — installs that need interactive CLI don't block file moves / hook wiring.
+- **What to watch:** `.claude/worktrees/` gitignore rule prevents accidental commit of `/worktree` sandboxes. Re-check in Phase 3 when worktrees used for qa-engineer.
+
 ## TODO: Fill in as phases progress
 
-- [ ] **Phase 2 (Agent tooling):** Reflect on MCP install friction, context-mode efficiency.
 - [ ] **Phase 3 (Bazel bootstrap):** rules_xcodeproj success/fallback decision.
 - [ ] **Phase 5 (Backend minimal):** Axum ergonomics, Tokio learning curve, NotesStore trait design.
 - [ ] **Phase 6 (Backend hardening):** tower middleware tuning, tracing setup, bench insights.
