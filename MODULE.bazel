@@ -12,5 +12,6 @@ bazel_dep(name = "rules_swift", version = "3.6.1")
 bazel_dep(name = "rules_apple", version = "4.5.3")
 bazel_dep(name = "rules_xcodeproj", version = "4.0.1")
 
-# Shared proto schema (libs/schema) — extensions wired in Phase 4
+# Shared proto schema (libs/schema)
 bazel_dep(name = "rules_proto", version = "7.1.0")
+bazel_dep(name = "rules_rust_prost", version = "0.70.0")

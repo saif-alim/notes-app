@@ -1,7 +1,14 @@
 load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@rules_rust_prost//:defs.bzl", "rust_prost_library")
 
 proto_library(
     name = "notes_proto",
     srcs = ["notes.proto"],
+    visibility = ["//visibility:public"],
+)
+
+rust_prost_library(
+    name = "notes_rust_proto",
+    proto = ":notes_proto",
     visibility = ["//visibility:public"],
 )
