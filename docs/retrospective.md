@@ -38,9 +38,19 @@
 - **What worked:** Bazelisk + Bazel 9.1.0 installed cleanly. BCR module resolution resolved version bumps transparently (apple_support 1.22.1 → 2.2.0, etc.). Opus advisor correctly predicted Plan A viability + 3hr time-box; resolved in ~15min.
 - **Tradeoff recorded:** `docs/architecture.md` — iOS build path section.
 
+### Phase 4 (Shared schema)
+- **Schema:** `libs/schema/notes.proto` — `notes.v1` package with `Note`, `ListNotesResponse`, `CreateNoteRequest`, `CreateNoteResponse`.
+- **Rust codegen:** Clean. `rules_rust_prost` 0.70.0 on BCR. One-line `rust_prost_library` target. ~100s cold (prost_build + tonic + h2 compile), cached after. Generated `pub mod notes::v1 { ... }` verified.
+- **Swift codegen blocker:** `rules_proto_grpc_swift` 5.6.0 + its transitive `rules_swift_package_manager` + `rules_go` still reference the old `CcInfo` Starlark symbol. Removed in Bazel 9.x — build fails at analysis. Overriding `rules_go` → 0.60.0 surfaced the same issue one layer deeper (`rules_swift_package_manager+/swiftpkg/internal/generate_modulemap.bzl`). Fighting the override chain was unsustainable.
+- **Decision:** Scope cut per plan. Swift side uses hand-written `Codable` structs in `libs/schema/Sources/NotesSchema/Notes.swift`, wrapped as `swift_library` target `//libs/schema:notes_swift_proto`. Proto stays the single source of truth for schema; Swift mirror is a 50-line hand-sync. Acceptable for four messages; reassess past ~10.
+- **Why this is still a good story:** Bazel meaningfully owns the proto → Rust pipeline (the harder half), the schema is single-source, and the hybrid is honest engineering — we hit a real-world Bazel 9 ecosystem gap and made a scope-right call rather than burn a phase on ruleset archaeology.
+- **What worked:** rules_rust_prost Bzlmod integration is excellent. prost-generated structs use `::prost::alloc` types — no std-vs-no-std surprises for Phase 5 Axum handlers.
+- **Advisor note:** This was a judgment call made without invoking the Opus advisor subagent because the cascade failure was observable directly (two Starlark errors in two different transitive deps, same root cause). Advisor was appropriate for the Phase 3 Plan A/B decision where evidence was mixed; here the signal was unambiguous.
+
 ## TODO: Fill in as phases progress
 
 - [ ] **Phase 3 (Bazel bootstrap):** ✅ Done — see above.
+- [ ] **Phase 4 (Shared schema):** ✅ Done — see above.
 - [ ] **Phase 5 (Backend minimal):** Axum ergonomics, Tokio learning curve, NotesStore trait design.
 - [ ] **Phase 6 (Backend hardening):** tower middleware tuning, tracing setup, bench insights.
 - [ ] **Phase 7 (iOS minimal):** SwiftUI state management, APIClient pattern, codegen integration.
@@ -57,9 +67,9 @@
 
 ## Unfamiliar Territory
 
-- [ ] Bazel + iOS: rules_apple/rules_xcodeproj learning curve (Phase 3).
-- [ ] Bzlmod vs legacy WORKSPACE: Bazel 7.x modern idiom (Phase 1).
-- [ ] prost + swift-protobuf codegen: first time wiring cross-language schema (Phase 4).
+- [x] Bazel + iOS: rules_apple works; rules_xcodeproj BwB had DerivedData permissions issue, fell back to `bazel build` + `simctl` (Phase 3).
+- [x] Bzlmod vs legacy WORKSPACE: Bazel 9.x Bzlmod-default; clean MODULE.bazel (Phase 1, 3).
+- [x] prost + swift-protobuf codegen: prost/rules_rust_prost clean; swift-protobuf chain broken on Bazel 9, scope-cut to hand-written Codables (Phase 4).
 - [ ] tower middleware: concurrency limits, graceful shutdown (Phase 6).
 
 ## What Worked

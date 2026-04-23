@@ -42,11 +42,12 @@
 
 ## Schema Story
 
-Single source of truth: `libs/schema/notes.proto`. Codegen via Bazel:
-- **Rust**: `prost-build` generates Rust structs
-- **iOS**: `swift-protobuf` generates Swift Codables
+Single source of truth: `libs/schema/notes.proto`. Two codegen paths:
 
-Adding a field: edit `.proto`, regenerate, update handlers/views.
+- **Rust** — Bazel-native via `rules_rust_prost` 0.70.0. `rust_prost_library` target emits `pub mod notes::v1 { Note, ListNotesResponse, CreateNoteRequest, CreateNoteResponse }`. Consumed by `services/api` (Phase 5).
+- **Swift** — Hand-written Codables in `libs/schema/Sources/NotesSchema/Notes.swift`, wrapped as a `swift_library`. The `rules_proto_grpc_swift` chain uses the removed `CcInfo` Starlark symbol and doesn't work on Bazel 9.1.0 without deep overrides; scope-cut to manual mirror. Field names use snake_case JSON (via `CodingKeys`) so the two sides round-trip the same bytes. See `libs/schema/CLAUDE.md` for the "add a message" procedure.
+
+Adding a field: edit `.proto`, rebuild Rust (`bazel build //libs/schema:notes_rust_proto`), mirror in `Notes.swift`, commit both in the same change.
 
 ## iOS Build Path Decision (Phase 3)
 
