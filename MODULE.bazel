@@ -1,0 +1,8 @@
+module(name = "notes_app", version = "0.0.1")
+
+# Bazel rulesets — versions pinned in Phase 3 after smoke-test
+bazel_dep(name = "rules_rust", version = "")
+bazel_dep(name = "rules_apple", version = "")
+bazel_dep(name = "rules_swift", version = "")
+bazel_dep(name = "rules_xcodeproj", version = "")
+bazel_dep(name = "rules_proto", version = "")
