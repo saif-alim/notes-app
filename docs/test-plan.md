@@ -38,12 +38,12 @@ One round-trip XCTest:
 
 `oha` benchmark (Phase 6):
 ```bash
-# Installed in Phase 6 tooling
-bash tools/bench/load.sh
-# Measures p50/p99 latency under sustained load
+# Backend must be running: bazel run //services/api:notes_api
+bash tools/bench/bench.sh
+# Measures p50/p99 latency under sustained load (1000 GET, 500 POST)
 ```
 
-See `tools/bench/` for script.
+Requires `oha`: `brew install oha`. Measures end-to-end HTTP latency including tower middleware (tracing, timeouts, concurrency limits).
 
 ## Failure Modes
 

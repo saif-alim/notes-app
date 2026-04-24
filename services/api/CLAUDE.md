@@ -1,6 +1,6 @@
 # services/api — Axum Backend
 
-Single crate. Axum 0.8 + tokio. In-memory store behind a trait. REST JSON transport; proto is IDL, DTOs are wire format.
+Single crate. Axum 0.8 + tokio. In-memory store behind a trait. REST JSON transport; proto is IDL, DTOs are wire format. Tower middleware: tracing, concurrency limits, timeouts.
 
 ## Layout
 
@@ -65,6 +65,27 @@ Handlers consume/emit serde DTOs from `dto.rs`. Proto types live at `//libs/sche
 {"error": {"code": "VALIDATION_ERROR", "message": "body must not be empty"}}
 ```
 Single code path for errors across endpoints. Extend by adding a variant + match arm in `error.rs`.
+
+## Middleware (Phase 6+)
+
+Tower middleware stack in `src/lib.rs::create_router` (built via `ServiceBuilder`):
+- **TraceLayer** (outermost): emits `tower_http` spans per request. Output includes latency, method, path, status.
+- **HandleErrorLayer**: catches `tower::limit::Error` from ConcurrencyLimitLayer (when load-shedding) and converts to 503 Service Unavailable.
+- **ConcurrencyLimitLayer**: rejects incoming requests when >100 are in-flight; emits an error that HandleErrorLayer catches.
+- **TimeoutLayer** (innermost): enforces 5s wall-clock timeout per request; auto-returns 408 if exceeded.
+
+Control log level via `RUST_LOG` env var:
+```bash
+RUST_LOG=notes_api=debug,tower_http=debug bazel run //services/api:notes_api
+```
+Default: `notes_api=debug,tower_http=debug`. Set to `error` or `info` to reduce verbosity.
+
+Benchmark with `oha`:
+```bash
+brew install oha
+bazel run //services/api:notes_api &  # start server in background
+./tools/bench/bench.sh                 # run load test (1000 GET, 500 POST)
+```
 
 ## How to run
 

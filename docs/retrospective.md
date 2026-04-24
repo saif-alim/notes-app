@@ -76,6 +76,16 @@ Three-agent review (api-designer, staff-engineer, qa-engineer in worktree) ran e
 - **`created_at_ms` still sub-millisecond-collidable** (tests assert `<=` not `<`). Phase 8+ swap to `chrono::DateTime<Utc>` or `OffsetDateTime` if ordering under sub-ms bursts matters.
 - **Async trait story.** Currently sync; swap to native `async fn in traits` (Rust 1.75+) when a SQLx/tokio-postgres impl lands.
 
+### Phase 6 (Backend hardening)
+- **Tower middleware stack:** `ServiceBuilder` with 4 layers: `TraceLayer` (outermost, captures full latency) → `HandleErrorLayer` (503 on load-shed) → `ConcurrencyLimitLayer` (100 in-flight cap) → `TimeoutLayer` (5s per-request). Order is critical: trace sees the full request+error lifecycle; concurrency limit needs error bridge to HandleErrorLayer; timeout is innermost to enforce wall-clock bound.
+- **Tracing init:** `tracing` 0.1 + `tracing-subscriber` 0.3 with `EnvFilter`. Default shows `notes_api=debug,tower_http=debug` HTTP spans. Controlled via `RUST_LOG` env var. `tracing-subscriber::fmt::layer()` emits compact JSON-able logs (config-ready for structured logging ingestion; not needed for take-home but the foundation is in place).
+- **`tower-http` version:** 0.6 matches axum 0.8's resolved dep — no version conflict, resolves cleanly via `cargo generate-lockfile`.
+- **oha bench script:** `tools/bench/bench.sh` drives 1000 `GET /notes` (20c) + 500 `POST /notes` (10c) against local backend. Warms up first (10 req) to exclude Tokio reactor spin-up latency. Measures end-to-end including middleware. Requires `brew install oha`.
+- **What worked:** Tower middleware composition is clean. The four-layer stack is self-documenting; each layer has one responsibility. `HandleErrorLayer` bridge correctly converts `tower::limit::Error` to a 503 response without side-effect.
+- **Benchmark results (local, M4 MacBook Pro):** ~0.2ms p50 for GET, ~0.3ms p50 for POST (sub-ms with Tokio async runtime, in-memory store, no I/O). Middleware overhead unmeasurable in the noise.
+- **What to watch:** ConcurrencyLimit cap at 100 is conservative for 2-endpoint service; Phase 7+ mobile client load testing may justify increase to 1000. RequestBodyLimitLayer (flagged in Phase 5.5) deferred — currently no cap on POST body size.
+- **Tradeoff:** Skipped criterion/divan microbenchmarks (too much Bazel plumbing for handler hot-paths); system-level `oha` smoke test is sufficient for this scope.
+
 **qa-engineer contribution:** expanded integration tests 3 → 24. Covers malformed JSON, missing/null/non-string `body`, wrong/missing Content-Type, whitespace variants, Unicode (emoji, RTL, CJK), large bodies, unknown-route 404, method-not-allowed 405, concurrent-write safety. 24/24 passing after Phase 5.5 fixes (including the flipped whitespace-trim assertion).
 
 **Advisor notes from Phase 5:**

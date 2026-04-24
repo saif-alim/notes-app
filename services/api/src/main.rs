@@ -2,8 +2,21 @@ use std::sync::Arc;
 
 use notes_api::{create_router, InMemoryNotesStore};
 
+fn init_tracing() {
+    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+    tracing_subscriber::registry()
+        .with(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "notes_api=debug,tower_http=debug".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    init_tracing();
+
     let store = Arc::new(InMemoryNotesStore::new());
     let app = create_router(store);
 
