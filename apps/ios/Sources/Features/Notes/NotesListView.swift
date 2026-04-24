@@ -4,6 +4,7 @@ import NotesSchema
 public struct NotesListView: View {
     @State private var viewModel: NotesViewModel
     @State private var draft: String = ""
+    @FocusState private var fieldFocused: Bool
 
     public init(viewModel: NotesViewModel) {
         _viewModel = State(wrappedValue: viewModel)
@@ -17,6 +18,7 @@ public struct NotesListView: View {
                         TextField("New note", text: $draft)
                             .textFieldStyle(.roundedBorder)
                             .submitLabel(.send)
+                            .focused($fieldFocused)
                             .onSubmit(submit)
                         Button("Add", action: submit)
                             .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -36,7 +38,7 @@ public struct NotesListView: View {
     private var notesContent: some View {
         switch viewModel.state {
         case .idle:
-            Text("Loading…").foregroundStyle(.secondary)
+            EmptyView()
         case .loaded(let notes) where notes.isEmpty:
             Text("No notes yet").foregroundStyle(.secondary)
         case .loaded(let notes):
@@ -49,6 +51,7 @@ public struct NotesListView: View {
     private func submit() {
         let body = draft
         draft = ""
+        fieldFocused = false
         Task { await viewModel.create(body: body) }
     }
 }

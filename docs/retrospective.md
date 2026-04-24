@@ -107,6 +107,24 @@ Three-agent review (api-designer, staff-engineer, qa-engineer in worktree) ran e
   - No offline cache. Kill-the-backend → empty list. Phase 8 adds in-memory cache.
   - Inline compose row instead of navigation sheet. Less view state, fewer files — matches "minimal" bar.
 
+### Phase 7.5 (reviewer swarm response)
+Three-agent review (ux-reviewer, user-flow-auditor, qa-engineer in worktree). Surface:
+
+**🔴 fixed this commit:**
+- **`appendingPathComponent` URL bug** (qa-engineer). With a leading-slash path like `"/notes"`, `appendingPathComponent` behavior is undefined — can silently produce `…:3000notes`. Replaced with `URL(string: path, relativeTo: baseURL)?.absoluteURL`. Verified: `URL(string: "/notes", relativeTo: URL(string: "http://127.0.0.1:3000")!)?.absoluteURL` → `http://127.0.0.1:3000/notes`.
+- **Keyboard stays open after submit** (ux-reviewer). After tapping Add or pressing Return, the keyboard remained, covering the newly added row. Added `@FocusState private var fieldFocused: Bool` and `fieldFocused = false` inside `submit()`. One-line fix.
+- **`.idle` rendered "Loading…" indefinitely** (ux-reviewer). When the backend is unreachable on launch, `state` never advances past `.idle`, leaving "Loading…" on screen with no recovery path. Changed to `EmptyView()` — honest, doesn't lie about what's happening. Phase 8 adds `.error` state + retry affordance.
+
+**🟡 documented for Phase 8:**
+- **Silent create failure** (user-flow-auditor). `create()` swallows errors after clearing `draft` — user loses a note with zero feedback. Highest Phase 8 priority per user-flow-auditor.
+- **`lineLimit` on NoteRow body** (ux-reviewer). Long notes expand the row unboundedly; add `.lineLimit(3).truncationMode(.tail)`.
+- **Accessibility labels** (ux-reviewer). Add button and timestamp lack VoiceOver context.
+- **`RelativeDateTimeFormatter` thread safety** (qa-engineer). Safe for Phase 7 (main-thread-only render); revisit if Phase 8 adds background refresh.
+- **`baseURL` hardcoded** — Phase 8 injects per-environment.
+
+**Debunked by swarm:**
+- ux-reviewer flagged double-submit race — user-flow-auditor and qa-engineer both confirmed `draft = ""` fires synchronously in `submit()` before the Task, so the button disables before a second tap can land. Not a real issue.
+
 **Advisor notes from Phase 5:**
 - Opus advisor call on JSON-wire format (DTOs vs pbjson) → DTOs. Verified correct call: the unused From-impls that shipped in the first cut were the exact dead-code smell the advisor predicted "only hurts if you over-engineer the mirror layer." Deleted them in 5.5.
 - Did not invoke advisor for the review triage — decisions were unambiguous (both reviewers converged on the same 🔴 list).

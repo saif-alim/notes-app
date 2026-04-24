@@ -30,7 +30,11 @@ public actor APIClient {
     }
 
     private func makeRequest(path: String, method: String, body: Data?) -> URLRequest {
-        var request = URLRequest(url: baseURL.appendingPathComponent(path))
+        // appendingPathComponent(_:) with a leading slash is undefined — it can
+        // silently drop the slash and produce "…:3000notes". Use URL(string:relativeTo:)
+        // which correctly appends the path segment regardless of the leading slash.
+        let resolvedURL = URL(string: path, relativeTo: baseURL)?.absoluteURL ?? baseURL
+        var request = URLRequest(url: resolvedURL)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
