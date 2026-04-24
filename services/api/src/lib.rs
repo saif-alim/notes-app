@@ -3,9 +3,11 @@ use std::sync::Arc;
 use axum::{routing::get, Router};
 
 pub mod dto;
+pub mod error;
 pub mod routes;
 pub mod store;
 
+pub use error::ApiError;
 pub use store::{InMemoryNotesStore, NotesStore};
 
 use routes::{create_note, list_notes, AppState};

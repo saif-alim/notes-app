@@ -25,9 +25,9 @@ services/api/
 | Method | Path | Body | Response | Status |
 |--------|------|------|----------|--------|
 | `GET` | `/notes` | — | `{"notes":[...]}` | 200 |
-| `POST` | `/notes` | `{"body":"..."}` | `{"note":{"id":..,"body":..,"created_at_unix":..}}` | 201 on success, 400 if body empty |
+| `POST` | `/notes` | `{"body":"..."}` | `{"note":{"id":..,"body":..,"created_at_ms":..}}` | 201 on success, 400 if body empty |
 
-Note ordering on list: ascending by `created_at_unix`. Empty store returns `{"notes":[]}`.
+Note ordering on list: ascending by `created_at_ms`. Empty store returns `{"notes":[]}`. Errors return a JSON envelope: `{"error":{"code":"VALIDATION_ERROR","message":"..."}}`. Body text is trimmed before storage; `"  hello  "` canonicalizes to `"hello"`.
 
 ## How to add a route
 
@@ -50,13 +50,21 @@ Note ordering on list: ascending by `created_at_unix`. Empty store returns `{"no
 
 ## Store
 
-`NotesStore` is a sync trait (not `async_trait`). `InMemoryNotesStore` uses `RwLock<HashMap<String, Note>>`. Swap for a persistent impl by implementing the trait on a new struct and changing the `Arc::new(...)` line in `main.rs`. No handler changes needed.
+`NotesStore` is a sync trait (not `async_trait`). `InMemoryNotesStore` uses `parking_lot::RwLock<HashMap<String, Note>>` — no lock poisoning, no `.expect` on the lock path. Swap for a persistent impl by implementing the trait on a new struct and changing the `Arc::new(...)` line in `main.rs`. No handler changes needed.
 
-IDs: UUIDv4. Timestamps: `i64` seconds since Unix epoch via `SystemTime`.
+IDs: UUIDv4. Timestamps: `i64` milliseconds since Unix epoch via `SystemTime`.
 
 ## DTOs vs proto types
 
-Handlers consume/emit serde DTOs from `dto.rs`. Proto types live at `//libs/schema:notes_rust_proto` (crate name `notes_proto`, module `notes::v1`). Conversions are explicit `From` impls — the DTO layer lets us evolve the wire format independently of the proto schema, and provides the serde glue prost doesn't emit by default. See `docs/retrospective.md` Phase 5 entry for the DTOs-vs-pbjson call.
+Handlers consume/emit serde DTOs from `dto.rs`. Proto types live at `//libs/schema:notes_rust_proto` (crate name `notes_proto`, module `notes::v1`). Only `From<Note>` conversions exist — the opposite-direction impls were deleted in Phase 5.5 after review flagged them as unused dead code with a silent-sentinel failure mode. DTO layer provides the serde surface prost doesn't emit by default; if schema and wire format ever diverge, the DTO is the place to encode the difference. See `docs/retrospective.md` Phase 5 entry for the DTOs-vs-pbjson call.
+
+## Errors
+
+`src/error.rs` defines `ApiError`. Handlers return `Result<T, ApiError>`; `ApiError` implements `IntoResponse` and emits the envelope:
+```json
+{"error": {"code": "VALIDATION_ERROR", "message": "body must not be empty"}}
+```
+Single code path for errors across endpoints. Extend by adding a variant + match arm in `error.rs`.
 
 ## How to run
 

@@ -3,11 +3,13 @@ syntax = "proto3";
 package notes.v1;
 
 // A single note. `id` is the server-assigned identifier; `body` is the free-form
-// text the user entered; `created_at_unix` is seconds since epoch (UTC).
+// text the user entered; `created_at_ms` is Unix epoch time in milliseconds (UTC).
+// Millisecond precision lets us sort bursts deterministically — second-precision
+// lost order when multiple notes were created in the same second.
 message Note {
   string id = 1;
   string body = 2;
-  int64 created_at_unix = 3;
+  int64 created_at_ms = 3;
 }
 
 // Response body for GET /notes.

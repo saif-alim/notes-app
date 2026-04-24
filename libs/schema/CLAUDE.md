@@ -46,6 +46,7 @@ See `docs/retrospective.md` Phase 4 entry for full context.
 
 ## Gotchas
 
-- Field names use `snake_case` in proto (e.g. `created_at_unix`) to match prost's default and the JSON wire format. Swift uses `camelCase` + `CodingKeys` to map back.
+- Field names use `snake_case` in proto (e.g. `created_at_ms`) to match prost's default and the JSON wire format. Swift uses `camelCase` + `CodingKeys` to map back.
+- `created_at_ms` is **milliseconds** since Unix epoch (UTC), i64. Renamed from `created_at_unix` (seconds) during Phase 5.5 after reviewer flagged the sort-instability under burst creates. Change ripples through `notes.proto`, `Notes.swift`, `store.rs`, `dto.rs`, and every test touching the field.
 - The Rust struct has `pub note: Option<Note>` for `CreateNoteResponse.note` because proto3 message-typed fields are optional. Swift mirrors this as `public let note: Note` (non-optional) because the server always populates it — if that changes, make Swift match.
 - `i64` in prost ↔ `Int64` in Swift. JSON numbers > 2^53 won't round-trip through JavaScript intermediaries, but there aren't any in this stack.

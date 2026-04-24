@@ -59,11 +59,34 @@
 - **Cold vs warm build:** 26s cold (downloads axum 0.8.9, tokio 1.52.1, tower 0.5.3, serde 1.0.228 + transitive tree, compiles each). Subsequent builds are 1–2s via Bazel's action cache.
 - **What worked:** rules_rust + Bzlmod + crate_universe is clean once the two bring-up gotchas are past. Zero drift between `Cargo.toml` and Bazel's resolved deps.
 
+### Phase 5.5 (Reviewer swarm response)
+Three-agent review (api-designer, staff-engineer, qa-engineer in worktree) ran end-of-phase per PLAN.md. Surface:
+
+**🔴 fixed this commit:**
+- **Unused `From<proto>` impls deleted from `dto.rs`.** Both reviewers flagged them; the `From<CreateNoteResponse>` impl silently returned a sentinel `NoteDto` when the inner `note: Option<Note>` was `None` — a lie at the boundary with no caller. Kept only the live direction (`From<Note> for NoteDto`, `From<Note> for CreateNoteResponseDto`).
+- **JSON error envelope.** New `src/error.rs` with `ApiError` enum + `IntoResponse`. Handlers return `Result<T, ApiError>`; error shape is `{"error":{"code":"VALIDATION_ERROR","message":"..."}}`. Replaces the plain-text `"body must not be empty"` response the iOS client would have gagged on.
+- **`parking_lot::RwLock`.** Drop-in replacement; no lock poisoning, no `.expect` on the lock path. Removes the panic surface that staff-engineer flagged.
+- **Body trimmed before storage.** qa-engineer surfaced a bug candidate: `routes.rs` trimmed for the emptiness check but stored the raw string. `"  hello  "` now canonicalizes to `"hello"` on the way in.
+- **`created_at_unix` → `created_at_ms` (i64 seconds → milliseconds).** Ripples through `notes.proto`, `Notes.swift`, `store.rs`, `dto.rs`, `services/api/CLAUDE.md`, `libs/schema/CLAUDE.md`, and 6 test call-sites. Needed before Phase 7 freezes the field on the iOS side — seconds lost sort order for burst creates.
+
+**🟡 documented for later:**
+- **Max body length.** No cap today; a 10MB body is accepted. Phase 6 hardening adds `tower::limit::RequestBodyLimitLayer` at the router layer, not per-handler.
+- **`GET /notes/:id`.** Phase 5 definition of done is `GET/POST /notes`; add in Phase 7 if the iOS list-to-detail navigation needs it.
+- **O(n) list clone + sort on every read.** Fine for take-home scale; Phase 6 bench can drive a `BTreeMap<(i64, String), Note>` keyed by insertion order if `GET /notes` shows up hot.
+- **`created_at_ms` still sub-millisecond-collidable** (tests assert `<=` not `<`). Phase 8+ swap to `chrono::DateTime<Utc>` or `OffsetDateTime` if ordering under sub-ms bursts matters.
+- **Async trait story.** Currently sync; swap to native `async fn in traits` (Rust 1.75+) when a SQLx/tokio-postgres impl lands.
+
+**qa-engineer contribution:** expanded integration tests 3 → 24. Covers malformed JSON, missing/null/non-string `body`, wrong/missing Content-Type, whitespace variants, Unicode (emoji, RTL, CJK), large bodies, unknown-route 404, method-not-allowed 405, concurrent-write safety. 24/24 passing after Phase 5.5 fixes (including the flipped whitespace-trim assertion).
+
+**Advisor notes from Phase 5:**
+- Opus advisor call on JSON-wire format (DTOs vs pbjson) → DTOs. Verified correct call: the unused From-impls that shipped in the first cut were the exact dead-code smell the advisor predicted "only hurts if you over-engineer the mirror layer." Deleted them in 5.5.
+- Did not invoke advisor for the review triage — decisions were unambiguous (both reviewers converged on the same 🔴 list).
+
 ## TODO: Fill in as phases progress
 
 - [x] **Phase 3 (Bazel bootstrap):** Done.
 - [x] **Phase 4 (Shared schema):** Done.
-- [x] **Phase 5 (Backend minimal):** Done.
+- [x] **Phase 5 + 5.5 (Backend minimal + reviewer response):** Done.
 - [ ] **Phase 5 (Backend minimal):** Axum ergonomics, Tokio learning curve, NotesStore trait design.
 - [ ] **Phase 6 (Backend hardening):** tower middleware tuning, tracing setup, bench insights.
 - [ ] **Phase 7 (iOS minimal):** SwiftUI state management, APIClient pattern, codegen integration.

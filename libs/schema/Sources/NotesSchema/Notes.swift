@@ -8,18 +8,18 @@ import Foundation
 public struct Note: Codable, Equatable, Hashable {
     public let id: String
     public let body: String
-    public let createdAtUnix: Int64
+    public let createdAtMs: Int64
 
-    public init(id: String, body: String, createdAtUnix: Int64) {
+    public init(id: String, body: String, createdAtMs: Int64) {
         self.id = id
         self.body = body
-        self.createdAtUnix = createdAtUnix
+        self.createdAtMs = createdAtMs
     }
 
     enum CodingKeys: String, CodingKey {
         case id
         case body
-        case createdAtUnix = "created_at_unix"
+        case createdAtMs = "created_at_ms"
     }
 }
 
