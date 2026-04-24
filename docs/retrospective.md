@@ -100,7 +100,7 @@ Three-agent review (api-designer, staff-engineer, qa-engineer in worktree) ran e
 - **What to watch:** ConcurrencyLimit cap at 100 is conservative for 2-endpoint service; Phase 7+ mobile client load testing may justify increase to 1000.
 - **Tradeoff:** Skipped criterion/divan microbenchmarks (too much Bazel plumbing for handler hot-paths); system-level `oha` smoke test is sufficient for this scope.
 
-**qa-engineer contribution:** expanded integration tests 3 → 24. Covers malformed JSON, missing/null/non-string `body`, wrong/missing Content-Type, whitespace variants, Unicode (emoji, RTL, CJK), large bodies, unknown-route 404, method-not-allowed 405, concurrent-write safety. 24/24 passing after Phase 5.5 fixes (including the flipped whitespace-trim assertion).
+**qa-engineer contribution:** expanded integration tests 3 → 24 (grew to 25 after Phase 6 added `post_oversized_body_returns_413` for the body-limit layer). Covers malformed JSON, missing/null/non-string `body`, wrong/missing Content-Type, whitespace variants, Unicode (emoji, RTL, CJK), large bodies, unknown-route 404, method-not-allowed 405, concurrent-write safety, 413 on oversized body. 25/25 passing on main.
 
 ### Phase 7 (iOS minimal)
 
@@ -182,18 +182,21 @@ Three-agent review (ux-reviewer, user-flow-auditor, qa-engineer in worktree). Su
 - **Scope boundary respected:** did not touch retro's `## What Worked` / `## What to Change` finalize sections — those are Phase 10 per PLAN.md:49.
 - **Deferred:** Phase 10 is the coherence pass on this retrospective itself (merge duplicates, collapse reviewer-swarm sub-entries, write final narrative). Phase 11 (bonus) and Phase 12 (fresh-clone verify + `/unleash`) remain.
 
-### Phase 11 (Bonus — attempted, scope-cut)
+### Phase 11 (Bonus — partial: library-half merged, Android scope-cut)
 
-**What was attempted:** `libs/platform-core` shared Rust crate + UniFFI Android bindings + Jetpack Compose app. Work lives on the `phase-11` branch.
+**What was attempted:** `libs/platform-core` shared Rust crate + UniFFI Android bindings + Jetpack Compose app.
 
-**What shipped on `phase-11`:**
+**What shipped on `main`** (commits `efc34ed` + `a061e52`):
 
-- Platform-core extraction complete: `NotesStore` trait, `InMemoryNotesStore`, `Note` model, `id`/`time`/`validate` helpers moved out of `services/api`. 24 integration tests pass unmodified. Cargo workspace added at root.
-- UniFFI `ffi` feature: `NotesCore` uniffi::Object, `Note` uniffi::Record, 2 host unit tests green.
+- Platform-core extraction complete: `NotesStore` trait, `InMemoryNotesStore`, `Note` model, `id`/`time`/`validate` helpers moved out of `services/api` into `libs/platform-core/`. 25 integration tests pass unmodified through the re-wired `services/api`. Cargo workspace added at root.
+- UniFFI `ffi` feature: `NotesCore` uniffi::Object, `Note` uniffi::Record, 2 host unit tests green (`//libs/platform-core:platform_core_test`).
 - Kotlin bindings generated from macOS dylib via standalone `tools/uniffi-bindgen/`.
+
+**What stayed on `phase-11` branch** (commit `9a44432`):
+
 - Android Gradle scaffold: `NotesViewModel` wrapping `NotesCore`, `NotesListScreen` (Compose), `tools/build-android.sh` (cargo-ndk cross-compile recipe).
 
-**Why not merged:**
+**Why Android stayed on branch:**
 
 Three compounding Bazel-ecosystem friction points — same class as Phase 4's `rules_proto_grpc_swift` breakage:
 
@@ -203,9 +206,19 @@ Three compounding Bazel-ecosystem friction points — same class as Phase 4's `r
 
 3. **Android NDK absent on dev machine** — no `cargo-ndk`, no NDK. Cross-compilation and instrumented emulator test not executable. The `tools/build-android.sh` script encodes the recipe; the Kotlin bindings are committed. But the E2E proof (`.so` loads, `NotesCore` round-trips in emulator) was not achievable.
 
-**Decision:** Partial bonus that can't be run end-to-end is a net negative per the plan's gate criterion. Core build on `main` stays fully green. `phase-11` preserves the work for reference.
+**Decision:** Library-half merged (the risky, interesting part — FFI proc-macros, hermetic-sandbox workarounds, Bazel feature-gating). Android app stayed on branch because a scaffold that can't be run end-to-end is worse than no scaffold. Core build on `main` green with platform-core in place; `phase-11` branch preserves the Gradle work for pickup once NDK is installed.
 
-**What would complete it:** Install NDK (`sdkmanager "ndk;26.3.11579264"`), `cargo install cargo-ndk`, run `./tools/build-android.sh`, verify `./gradlew installDebug` + emulator smoke test. Architecture is sound; gap is toolchain setup, not design.
+**What would complete it:** Install NDK (`sdkmanager "ndk;26.3.11579264"`), `cargo install cargo-ndk`, check out `phase-11`, run `./tools/build-android.sh`, verify `./gradlew installDebug` + emulator smoke test. Architecture is sound; gap is toolchain setup, not design.
+
+### Phase 12 (Final verification)
+
+- **Build:** `bazel build //...` green (8 targets, 2s warm).
+- **Tests:** `bazel test //...` runs 2 targets (`platform_core_test` = 2 cases, `integration_test` = 25 cases). iOS tests carry `tags = ["manual"]` — invoke explicitly: `bazel test //apps/ios:NotesTests` (21 XCTest cases, 3 classes across 3 files).
+- **Server:** `bazel run //services/api:notes_api` boots; GET /notes → 200, POST /notes → 201, tracing spans emitted.
+- **Fresh-clone fix:** added `.bazelignore` listing `.claude/worktrees` + `target`. Reviewer-swarm `git worktree add` sandboxes under `.claude/worktrees/` contain stale `BUILD.bazel` files that broke `bazel build //...` via `all_crate_deps` failing on the missing root `Cargo.toml`. `.gitignore` already excluded them from commits; `.bazelignore` keeps Bazel from traversing them locally. Fresh clone never has the directory so would not have hit this, but defensive ignore keeps local dev loops green regardless of swarm residue.
+- **Docs pass:** test-plan test counts synced to reality (integration 24 → 25; ViewModel 6 → 8; APIClient 5 → 6; NotesListViewTests added — 7 cases). Retrospective 24 → 25 correction. Phase 11 narrative corrected to reflect library-half-on-main split.
+- **Git history:** one commit per phase + `.5` reviewer-swarm follow-ups. Clean narrative.
+- **Interviewer probes anticipated:** (a) Why `manual` tag on iOS targets — sim device pin lives in `.bazelrc`, untagged `//...` would break on CI boxes without a simulator configured. (b) Why platform-core on main but Android on branch — the library is the real engineering; the Gradle app is scaffolding that needs an NDK we don't have. (c) DTO layer vs pbjson — Phase 5 retro covers this; the unused `From<proto>` impls that shipped in the first pass and got deleted in 5.5 are exactly the over-engineered-mirror smell the advisor predicted.
 
 ## TODO: Fill in as phases progress
 
@@ -216,7 +229,8 @@ Three compounding Bazel-ecosystem friction points — same class as Phase 4's `r
 - [x] **Phase 7 (iOS minimal):** SwiftUI state management (`@Observable` + `@MainActor`), APIClient pattern (actor), codegen integration (`import NotesSchema`). Reviewer swarm pending.
 - [x] **Phase 8 + 8.5 (iOS polish + reviewer response):** Cache design, error state UX. Swarm (naive-tester + junior-dev + perf-engineer) findings: `SwitchingNotesAPI` renamed + moved to TestDoubles, error-routing policy comment added to load(), @MainActor on formatter, @unchecked Sendable + nonisolated(unsafe) comments, draft-preserve comment.
 - [x] **Phase 9 (Docs pass):** README adds Configuration (`NOTES_API_BASE_URL`), explicit `NotesTests` label, bench command. architecture.md adds Middleware Stack section (4-layer order + rationale), inline bench numbers (~0.2ms p50 GET, ~0.3ms p50 POST), 3 tradeoff rows (DTOs vs pbjson, sync trait, Swift hand-Codables), cache-strategy clarification; TODO block removed. test-plan.md corrects integration path (`notes_integration.rs`), reframes Rust unit coverage as integration-only (24 cases), documents `tower::ServiceExt::oneshot` pattern, inlines bench baseline, clarifies iOS test file layout, drops stale TODO. Root `CLAUDE.md` replaces Phase-8 stale "no cache/no error states" with honest limits (no persistence, no TLS, no auth) + checks off phases 1–8.
-- [ ] **Phase 12 (Final):** What would an interviewer probe first? Unfamiliar territory conquered?
+- [x] **Phase 11 (Bonus):** Library-half (`libs/platform-core` + UniFFI `ffi` feature) merged to main. Android Gradle scaffold stays on `phase-11` branch pending NDK install. 25 integration tests pass unmodified through re-wired `services/api`.
+- [x] **Phase 12 (Final):** Build/test/run green. Added `.bazelignore` (fresh-clone fix). Doc drift corrected (test counts, Phase 11 narrative). Interviewer probes: `manual` tag on iOS targets, platform-core split, DTO-vs-pbjson tradeoff.
 
 ## Alternatives Considered
 

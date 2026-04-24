@@ -6,20 +6,21 @@
 No separate unit-test target — the `NotesStore` trait, `InMemoryNotesStore`, `ApiError` → `IntoResponse`, and DTO conversions are all exercised end-to-end through the integration suite below (handlers run their real store + error paths in-process via `tower::ServiceExt::oneshot`). Keeps a single test target + covers every code path reachable from HTTP. Revisit when persistence swaps in and a store impl grows logic not reachable via routes.
 
 ### iOS (Phase 8 — done)
-Two test files + one support file under `apps/ios/Tests/`:
+Three test files + one support file under `apps/ios/Tests/` — 21 XCTest cases total:
 
-- `NotesViewModelTests.swift` — `NotesViewModelTests` class, 6 cases: load from idle, error no-cache, error keeps-cache, create success, create error, empty-body guard.
+- `NotesViewModelTests.swift` — `NotesViewModelTests` class, 8 cases: load from idle, error no-cache, error keeps-cache, create success, create error, empty-body guard, load non-APIError wraps into `.transport`, create non-APIError wraps into `.transport`.
+- `NotesListViewTests.swift` — `NotesListViewTests` class, 7 cases: view transitions loaded / loaded-empty / error, draft preserved on create failure, stale-while-revalidate keeps cache on refresh failure, Add button empty-body guard, Add button calls API on non-empty draft.
 - `APIClientTests.swift` — two `XCTestCase` classes:
-  - `APIClientTests` — URL composition, list decode, create decode, server error envelope, unknown 500.
-  - `APIErrorUserMessageTests` — every `APIError.userMessage` branch.
+  - `APIClientTests` — 6 cases: URL resolution with leading slash, list decode, create decode, server error envelope, unknown 500, decoding error on malformed JSON.
+  - `APIErrorUserMessageTests` — 1 case covering every `APIError.userMessage` branch.
 - `TestDoubles.swift` (support, not a test case) — `FakeNotesAPI`, `FailingNotesAPI`, `SwitchingNotesAPI` for ViewModel tests; `StubURLProtocol` for `APIClient` tests.
 
-Run: `bazel test //apps/ios:NotesTests`. `.bazelrc` pins `--ios_simulator_device="iPhone 16 Pro" --ios_simulator_version=18.4` so the default xctestrunner device doesn't miss on current SDKs.
+Run: `bazel test //apps/ios:NotesTests`. Target carries `tags = ["manual"]` so `bazel test //...` skips it — invoke explicitly. `.bazelrc` pins `--ios_simulator_device="iPhone 16 Pro" --ios_simulator_version=18.4` so the default xctestrunner device doesn't miss on current SDKs.
 
 ## Integration Tests
 
 ### Backend
-24 integration tests hitting the live router in-process. Uses `tower::ServiceExt::oneshot` to drive `create_router(store)` without binding a socket — full suite runs in ~0.3s.
+25 integration tests hitting the live router in-process. Uses `tower::ServiceExt::oneshot` to drive `create_router(store)` without binding a socket — full suite runs in ~0.3s.
 
 Coverage:
 - **Happy path** — POST → GET round-trip, `created_at_ms` ascending order, body trim canonicalization.

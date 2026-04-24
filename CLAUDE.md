@@ -15,7 +15,8 @@ Notes app: SwiftUI iOS client + Rust/Axum backend + shared .proto schema, built 
 | iOS app | `apps/ios/` | Phase 7+ |
 | Rust backend | `services/api/` | Phase 5+ |
 | Proto schema | `libs/schema/` | Phase 4 |
-| Build config | `MODULE.bazel`, `.bazelrc` | Phase 1+ |
+| Platform core (shared Rust) | `libs/platform-core/` | Phase 11 |
+| Build config | `MODULE.bazel`, `.bazelrc`, `.bazelignore` | Phase 1+ |
 | Docs | `docs/` | Phases 1–12 |
 | Agent swarm | `agents/` → `.claude/agents/` (Phase 2) | Phase 2+ |
 | Benchmarks | `tools/bench/` | Phase 6+ |
@@ -25,7 +26,8 @@ Notes app: SwiftUI iOS client + Rust/Axum backend + shared .proto schema, built 
 ```bash
 bazel build //...               # build all
 bazel run //services/api:notes_api   # start backend on :3000
-bazel test //...                # run all tests
+bazel test //...                # Rust tests (platform-core + integration)
+bazel test //apps/ios:NotesTests     # iOS XCTest suite (manual tag — explicit invoke)
 
 # iOS: ./tools/run-ios-sim.sh   (builds via Bazel, installs on simulator)
 ```
@@ -73,10 +75,10 @@ bazel test //...                # run all tests
 | 6 | Backend hardening: tower middleware, tracing, bench ✓ |
 | 7 | iOS minimal: SwiftUI, views, viewmodels, round-trip ✓ |
 | 8 | iOS polish: error/loading states, cache, XCTest ✓ |
-| 9 | Docs pass: README verify, architecture finalize, test-plan complete ← current |
-| 10 | Retro finalize: coherence pass on living doc |
-| 11 | **Bonus:** platform-core + Android (only if 1–10 solid) |
-| 12 | Final verify: fresh-clone smoke test, git history review |
+| 9 | Docs pass: README verify, architecture finalize, test-plan complete ✓ |
+| 10 | Retro finalize: coherence pass on living doc ✓ |
+| 11 | **Bonus:** `libs/platform-core` + UniFFI ✓ on main; Android Gradle scaffold on `phase-11` (NDK install gap) |
+| 12 | Final verify: fresh-clone smoke test, git history review ✓ |
 
 Full details: [PLAN.md](PLAN.md).
 

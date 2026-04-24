@@ -58,10 +58,19 @@ per connection (tuned in Phase 6 bench).
 
 ## Testing
 
-- Unit tests in same file as source (Rust: `#[cfg(test)]`, Swift: dedicated Tests/)
-- Integration tests in `tests/` or `Tests/` at package root
-- Test naming: `test_<function>_<scenario>` (e.g., `test_insert_note_creates_id`)
-- Fixtures and mocks in `tests/common/` or `Tests/Helpers/`
+- Rust backend: no `#[cfg(test)]` unit modules — all `src/` logic is reachable through HTTP, so one integration suite in `services/api/tests/notes_integration.rs` drives the real router via `tower::ServiceExt::oneshot`. Add an integration case per handler branch. Revisit if a store impl grows logic unreachable from routes.
+- Rust library (`libs/platform-core`): `#[cfg(test)]` module inline with source — no HTTP surface to exercise.
+- Swift iOS: three XCTest files under `apps/ios/Tests/` — ViewModel state transitions, View driver tests (state → rendered state), APIClient decode / error-envelope / URL assembly. `TestDoubles.swift` holds fakes + `StubURLProtocol`; not a test case.
+- Test naming: `test_<function>_<scenario>` in Rust (e.g., `post_oversized_body_returns_413`); `test_<scenario>_<expectedOutcome>` in Swift (e.g., `test_load_fromIdle_transitionsLoadingThenLoaded`).
+- `ios_unit_test` targets carry `tags = ["manual"]` to stay out of `bazel test //...` — invoke explicitly via `bazel test //apps/ios:NotesTests`. Simulator device pinned in `.bazelrc`.
+
+## Bazel
+
+- Target naming: `<dir>_<kind>` (e.g., `notes_rust_proto`, `notes_swift_proto`, `platform_core_test`, `integration_test`). `NotesApp` / `NotesTests` / `NotesLib` follow Apple rules conventions.
+- `tags = ["manual"]` on iOS application + test targets — keeps simulator-dependent targets out of `//...` so CI without a simulator configured still works.
+- `.bazelignore` lists `.claude/worktrees` (reviewer-swarm sandboxes) + `target` (Cargo scratch). Without it, Bazel traverses stale BUILD files inside worktrees and fails on `all_crate_deps`.
+- Bzlmod only (`MODULE.bazel`). No legacy `WORKSPACE`.
+- `rust_prost_library` for proto codegen; hand-written Codables on the Swift side (see `libs/schema/CLAUDE.md` and retro §Phase 4 for why the Swift proto chain is scope-cut on Bazel 9).
 
 ## Documentation
 
@@ -69,9 +78,3 @@ per connection (tuned in Phase 6 bench).
 - Don't comment "what" — well-named identifiers do that
 - Block comments for algorithmic notes; inline comments rare
 - README + docs/ are first-class artifacts, updated in same commit as code changes
-
-## TODO
-
-- [ ] Flesh out as conventions are established per phase
-- [ ] Add Bazel naming conventions (targets, packages)
-- [ ] Add proto import/dependency conventions
