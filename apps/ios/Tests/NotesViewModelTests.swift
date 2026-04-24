@@ -34,13 +34,7 @@ final class NotesViewModelTests: XCTestCase {
         await vm.load()
         XCTAssertEqual(vm.state, .loaded(cached))
 
-        // Now fail on the next refresh
-        api.stubbedNotes = []
-        let failingAPI = FailingNotesAPI(.transport("offline"))
-        let vm2 = NotesViewModel(api: failingAPI)
-        // Seed cached state directly via a first load with working api, then swap
-        // Simpler: test via a custom double that fails after N calls
-        let switchingAPI = SwitchingNotesAPI(first: cached, thenFail: .transport("offline"))
+        let switchingAPI = SucceedOnceThenFailNotesAPI(first: cached, thenFail: .transport("offline"))
         let vm3 = NotesViewModel(api: switchingAPI)
         await vm3.load()
         XCTAssertEqual(vm3.state, .loaded(cached))
@@ -78,28 +72,5 @@ final class NotesViewModelTests: XCTestCase {
 
         await vm.create(body: "   ")
         XCTAssertEqual(api.createCallCount, 0)
-    }
-}
-
-// MARK: - SwitchingNotesAPI
-
-private final class SwitchingNotesAPI: NotesAPI, @unchecked Sendable {
-    private let firstNotes: [Note]
-    private let failError: APIError
-    private var callCount = 0
-
-    init(first: [Note], thenFail: APIError) {
-        firstNotes = first
-        failError = thenFail
-    }
-
-    func listNotes() async throws -> [Note] {
-        callCount += 1
-        if callCount == 1 { return firstNotes }
-        throw failError
-    }
-
-    func createNote(body: String) async throws -> Note {
-        throw failError
     }
 }

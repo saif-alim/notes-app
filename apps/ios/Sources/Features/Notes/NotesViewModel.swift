@@ -23,9 +23,12 @@ public final class NotesViewModel {
     }
 
     public func load() async {
+        // Error routing: if we already have cached data (.loaded), keep it visible and surface
+        // the failure via lastLoadError (→ alert). If we have no cache yet, transition to
+        // .error(APIError) so the view can show an inline Retry row.
         switch state {
         case .loaded:
-            // Stale-while-revalidate: keep cached rows, surface errors via lastLoadError.
+            // Stale-while-revalidate: cached rows stay, refresh failure surfaces as alert.
             do {
                 let notes = try await api.listNotes()
                 state = .loaded(notes)

@@ -4,6 +4,7 @@ import NotesLib
 
 // MARK: - FakeNotesAPI
 
+// @unchecked Sendable: mutable state is only accessed from @MainActor tests — no real races.
 final class FakeNotesAPI: NotesAPI, @unchecked Sendable {
     var stubbedNotes: [Note] = []
     var stubbedCreateResult: Result<Note, Error> = .success(Note(id: "1", body: "ok", createdAtMs: 0))
@@ -25,6 +26,7 @@ final class FakeNotesAPI: NotesAPI, @unchecked Sendable {
 
 // MARK: - FailingNotesAPI
 
+// @unchecked Sendable: immutable after init; safe to call from any context.
 final class FailingNotesAPI: NotesAPI, @unchecked Sendable {
     let error: APIError
     init(_ error: APIError) { self.error = error }
@@ -37,6 +39,8 @@ final class FailingNotesAPI: NotesAPI, @unchecked Sendable {
 
 final class StubURLProtocol: URLProtocol {
     typealias Handler = (URLRequest) -> (Data, HTTPURLResponse)
+    // nonisolated(unsafe): URLProtocol callbacks arrive on URLSession's internal thread,
+    // not on any actor. Tests run serially so access is safe in practice.
     nonisolated(unsafe) static var handler: Handler?
 
     override class func canInit(with request: URLRequest) -> Bool { true }
@@ -54,6 +58,31 @@ final class StubURLProtocol: URLProtocol {
     }
 
     override func stopLoading() {}
+}
+
+// MARK: - SucceedOnceThenFailNotesAPI
+
+// Succeeds on the first listNotes() call, then throws — tests the stale-while-revalidate path.
+// @unchecked Sendable: callCount mutated only from @MainActor tests — no real races.
+final class SucceedOnceThenFailNotesAPI: NotesAPI, @unchecked Sendable {
+    private let firstNotes: [Note]
+    private let failError: APIError
+    private var callCount = 0
+
+    init(first: [Note], thenFail: APIError) {
+        firstNotes = first
+        failError = thenFail
+    }
+
+    func listNotes() async throws -> [Note] {
+        callCount += 1
+        if callCount == 1 { return firstNotes }
+        throw failError
+    }
+
+    func createNote(body: String) async throws -> Note {
+        throw failError
+    }
 }
 
 // MARK: - Helpers

@@ -163,7 +163,7 @@ Three-agent review (ux-reviewer, user-flow-auditor, qa-engineer in worktree). Su
 - [ ] **Phase 5 (Backend minimal):** Axum ergonomics, Tokio learning curve, NotesStore trait design.
 - [x] **Phase 6 (Backend hardening):** tower middleware tuning, tracing setup, bench insights. Reviewer swarm fixes applied (HandleErrorLayer, RequestBodyLimitLayer, lock scope).
 - [x] **Phase 7 (iOS minimal):** SwiftUI state management (`@Observable` + `@MainActor`), APIClient pattern (actor), codegen integration (`import NotesSchema`). Reviewer swarm pending.
-- [x] **Phase 8 (iOS polish):** Cache design, error state UX.
+- [x] **Phase 8 + 8.5 (iOS polish + reviewer response):** Cache design, error state UX. Swarm (naive-tester + junior-dev + perf-engineer) findings: `SwitchingNotesAPI` renamed + moved to TestDoubles, error-routing policy comment added to load(), @MainActor on formatter, @unchecked Sendable + nonisolated(unsafe) comments, draft-preserve comment.
 - [ ] **Phase 9 (Docs pass):** README clarity, architecture diagram completeness, test-plan accuracy.
 - [ ] **Phase 12 (Final):** What would an interviewer probe first? Unfamiliar territory conquered?
 

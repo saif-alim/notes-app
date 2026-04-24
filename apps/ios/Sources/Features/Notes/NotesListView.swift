@@ -87,6 +87,7 @@ public struct NotesListView: View {
         fieldFocused = false
         Task {
             await viewModel.create(body: body)
+            // Preserve draft on failure so the user can retry with their original text.
             if viewModel.lastCreateError == nil {
                 draft = ""
             }
@@ -97,7 +98,8 @@ public struct NotesListView: View {
 private struct NoteRow: View {
     let note: Note
 
-    private static let formatter: RelativeDateTimeFormatter = {
+    // @MainActor: RelativeDateTimeFormatter is not thread-safe; keep it on the main actor.
+    @MainActor private static let formatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .short
         return f
