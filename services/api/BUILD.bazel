@@ -1,1 +1,27 @@
-# Rust backend package — wired in Phase 5
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
+load("@crates//:defs.bzl", "all_crate_deps")
+
+rust_library(
+    name = "notes_api_lib",
+    srcs = glob(
+        ["src/**/*.rs"],
+        exclude = ["src/main.rs"],
+    ),
+    crate_name = "notes_api",
+    edition = "2021",
+    visibility = ["//visibility:public"],
+    deps = all_crate_deps(normal = True) + [
+        "//libs/schema:notes_rust_proto",
+    ],
+)
+
+rust_binary(
+    name = "notes_api",
+    srcs = ["src/main.rs"],
+    edition = "2021",
+    deps = [":notes_api_lib"] + all_crate_deps(normal = True) + [
+        "//libs/schema:notes_rust_proto",
+    ],
+)
+
+# rust_test added in commit 4 once tests/ directory is populated

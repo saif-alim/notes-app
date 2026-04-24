@@ -3,8 +3,21 @@ module(name = "notes_app", version = "0.0.1")
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "1.0.0")
 
-# Rust backend (services/api) — extensions wired in Phase 5
+# Rust backend (services/api)
 bazel_dep(name = "rules_rust", version = "0.70.0")
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(edition = "2021")
+use_repo(rust, "rust_toolchains")
+register_toolchains("@rust_toolchains//:all")
+
+crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+crate.from_cargo(
+    name = "crates",
+    cargo_lockfile = "//services/api:Cargo.lock",
+    manifests = ["//services/api:Cargo.toml"],
+)
+use_repo(crate, "crates")
 
 # iOS app (apps/ios) — extensions wired in Phase 7
 bazel_dep(name = "apple_support", version = "2.2.0")

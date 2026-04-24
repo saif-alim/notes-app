@@ -1,0 +1,2 @@
+# Root package. Empty on purpose — required by crate_universe for workspace
+# path resolution and as a target for repo-wide marker files.
