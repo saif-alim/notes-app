@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "services/api",
+    "libs/platform-core",
+]
+resolver = "2"

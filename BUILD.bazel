@@ -1,2 +1,2 @@
-# Root package. Empty on purpose — required by crate_universe for workspace
-# path resolution and as a target for repo-wide marker files.
+# Root package. Required by crate_universe for workspace path resolution.
+exports_files(["Cargo.toml", "Cargo.lock"])

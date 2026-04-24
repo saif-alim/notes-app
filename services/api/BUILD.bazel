@@ -11,7 +11,7 @@ rust_library(
     edition = "2021",
     visibility = ["//visibility:public"],
     deps = all_crate_deps(normal = True) + [
-        "//libs/schema:notes_rust_proto",
+        "//libs/platform-core:platform_core",
     ],
 )
 
@@ -20,7 +20,7 @@ rust_binary(
     srcs = ["src/main.rs"],
     edition = "2021",
     deps = [":notes_api_lib"] + all_crate_deps(normal = True) + [
-        "//libs/schema:notes_rust_proto",
+        "//libs/platform-core:platform_core",
     ],
 )
 
@@ -32,6 +32,6 @@ rust_test(
         normal = True,
         normal_dev = True,
     ) + [
-        "//libs/schema:notes_rust_proto",
+        "//libs/platform-core:platform_core",
     ],
 )
