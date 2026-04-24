@@ -3,33 +3,46 @@
 ## Component Diagram
 
 ```
-┌─────────────────────────────────────┐
-│      iOS App (SwiftUI + MVVM)       │
-│  ┌─────────────────────────────────┐│
-│  │  NotesView (list + detail)     ││
-│  │  NotesViewModel (state mgmt)   ││
-│  │  APIClient (HTTP calls)        ││
-│  └─────────────────────────────────┘│
-└─────────────┬───────────────────────┘
-              │
-              │ HTTP (REST)
-              ▼
-┌─────────────────────────────────────┐
-│  Rust Backend (Axum + Tokio)        │
-│  ┌─────────────────────────────────┐│
-│  │  Router (GET/POST /notes)      ││
-│  │  NotesStore (trait + impl)     ││
-│  │  Tracing + Tower middleware    ││
-│  └─────────────────────────────────┘│
-└─────────────┬───────────────────────┘
-              │
-              ▼
-┌─────────────────────────────────────┐
-│  Shared Schema (.proto)             │
-│  ├─ Note message                    │
-│  └─ Codegen: Rust (prost) + Swift   │
-└─────────────────────────────────────┘
+┌──────────────────────────┐    ┌──────────────────────────┐
+│   iOS App (SwiftUI+MVVM) │    │  Android App (Compose)   │
+│  NotesViewModel          │    │  NotesViewModel          │
+│  APIClient (HTTP/JSON)   │    │  NotesCore (UniFFI FFI)  │
+└────────────┬─────────────┘    └────────────┬─────────────┘
+             │ HTTP/REST                      │ UniFFI JNA (in-process)
+             ▼                               ▼
+┌──────────────────────────────────────────────────────────┐
+│         libs/platform-core (shared Rust crate)           │
+│  ┌──────────────────────────────────────────────────────┐│
+│  │  NotesStore trait + InMemoryNotesStore impl         ││
+│  │  Note model, id, time, validate utilities           ││
+│  │  [ffi feature] NotesCore uniffi::Object             ││
+│  └──────────────────────────────────────────────────────┘│
+└──────────────────────────┬───────────────────────────────┘
+             │ re-exports via services/api/src/store.rs
+             ▼
+┌──────────────────────────────────────────────────────────┐
+│  Rust Backend (Axum + Tokio) — services/api              │
+│  Router (GET/POST /notes) · DTOs · Tower middleware      │
+└──────────────────────────┬───────────────────────────────┘
+             │ proto IDL only
+             ▼
+┌──────────────────────────────────────────────────────────┐
+│  Shared Schema — libs/schema/notes.proto                 │
+│  Codegen: Rust (prost/rules_rust_prost) + Swift (manual) │
+└──────────────────────────────────────────────────────────┘
 ```
+
+## Request Path: Android → platform-core (in-process)
+
+1. User taps "Add" in `NotesListScreen` → `NotesViewModel.submit()` called on main thread.
+2. ViewModel trims the draft; skips if blank (same guard as iOS).
+3. `core.createNote(body)` — `core` is a UniFFI-generated `NotesCore` Kotlin object backed by `Arc<InMemoryNotesStore>` in the Rust heap.
+4. UniFFI JNA bridge serializes the Kotlin String, calls through `libplatform_core.so` into `NotesCore::create_note`, which calls `InMemoryNotesStore::create`.
+5. `InMemoryNotesStore::create` generates UUID + `now_ms()` timestamp, inserts into the `parking_lot::RwLock<HashMap>`, returns a `platform_core::Note`.
+6. JNA bridge deserializes the returned `Note` record into a Kotlin `Note` data class (same fields: `id`, `body`, `createdAtMs`).
+7. ViewModel calls `core.listNotes()` to reload, emits into `StateFlow<List<Note>>`, Compose re-renders.
+
+**No HTTP**: Android talks to the Rust store directly — proves platform-core portability. iOS already proves the REST wire; the two paths are orthogonal rubric signals.
 
 ## Request Path: iOS → Axum → Store
 
@@ -84,7 +97,9 @@ Single source of truth: `libs/schema/notes.proto`. Two codegen paths:
 - **Rust** — Bazel-native via `rules_rust_prost` 0.70.0. `rust_prost_library` target emits `pub mod notes::v1 { Note, ListNotesResponse, CreateNoteRequest, CreateNoteResponse }`. Consumed by `services/api` (Phase 5).
 - **Swift** — Hand-written Codables in `libs/schema/Sources/NotesSchema/Notes.swift`, wrapped as a `swift_library`. The `rules_proto_grpc_swift` chain uses the removed `CcInfo` Starlark symbol and doesn't work on Bazel 9.1.0 without deep overrides; scope-cut to manual mirror. Field names use snake_case JSON (via `CodingKeys`) so the two sides round-trip the same bytes. See `libs/schema/CLAUDE.md` for the "add a message" procedure.
 
-Adding a field: edit `.proto`, rebuild Rust (`bazel build //libs/schema:notes_rust_proto`), mirror in `Notes.swift`, commit both in the same change.
+- **platform-core** — Hand-written `platform_core::Note { id, body, created_at_ms }` in `libs/platform-core/src/model.rs`. Same tradeoff as the Swift mirror: 3 fields × 1 message = ~6 lines, not worth coupling Android to prost. Services/api converts: `From<platform_core::Note>` for DTOs.
+
+Adding a field: edit `.proto`, rebuild Rust (`bazel build //libs/schema:notes_rust_proto`), mirror in `Notes.swift`, mirror in `libs/platform-core/src/model.rs`, update `ffi.rs` if FFI surface changes, regenerate Kotlin bindings (`apps/android/CLAUDE.md`), commit all in the same change.
 
 ## iOS Build Path Decision (Phase 3)
 
@@ -131,6 +146,10 @@ xcrun simctl launch booted com.notes.app
 | JSON wire format | Hand-written DTOs + `From<Note>` | Symmetric with Swift hand-Codables; no build-infra cost; wire layer evolves independently of proto | `pbjson-types` via custom aspect |
 | `NotesStore` trait | Sync methods | In-memory ops don't await; avoids `async-trait` + `Pin<Box<Fut>>` at trait boundary | Native `async fn in traits` — flip when SQLx lands |
 | Swift schema codegen | Hand-written `Codable` structs | `rules_proto_grpc_swift` chain broken on Bazel 9 (`CcInfo` removed); 50 lines < ruleset archaeology | `swift-protobuf` via rules_proto_grpc_swift |
+| platform-core | Shared Rust crate (proto-free `Note` mirror) | Lets Android consume the domain model via UniFFI without dragging prost into the FFI surface | Expose proto-generated types via FFI (prost not JNA-friendly) |
+| UniFFI `ffi` feature gate | Optional dep, not compiled by Bazel `rust_library` | UniFFI proc-macros read `Cargo.toml` via file I/O in the sandbox — Bazel sandbox blocks it; feature gate isolates the FFI surface | compile_data hack to include Cargo.toml in sandbox |
+| Android build | cargo-ndk + standard Gradle (not rules_android) | No `rules_uniffi` exists; JNI+Compose underdocumented in Bazel; NDK cross-compile via cargo-ndk is idiomatic | rules_android + rules_kotlin (fragile on Bazel 9 per Phase 4 precedent) |
+| Android ↔ backend | In-process via UniFFI | Proves shared-core portability; iOS already proves REST wire — orthogonal rubric signals, no duplication | HTTP to Axum (adds OkHttp/Retrofit with zero new rubric signal) |
 
 ## Performance Notes
 

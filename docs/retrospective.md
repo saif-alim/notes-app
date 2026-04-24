@@ -166,6 +166,37 @@ Three-agent review (ux-reviewer, user-flow-auditor, qa-engineer in worktree). Su
 - **Scope boundary respected:** did not touch retro's `## What Worked` / `## What to Change` finalize sections — those are Phase 10 per PLAN.md:49.
 - **Deferred:** Phase 10 is the coherence pass on this retrospective itself (merge duplicates, collapse reviewer-swarm sub-entries, write final narrative). Phase 11 (bonus) and Phase 12 (fresh-clone verify + `/unleash`) remain.
 
+### Phase 11 (Bonus: platform-core + Android + UniFFI)
+
+**Scope delivered:**
+- `libs/platform-core` — proto-free Rust crate. Extracted `NotesStore` trait + `InMemoryNotesStore`, `Note` model, `id`/`time`/`validate` helpers from `services/api/src/store.rs`. `services/api` re-exports from platform-core; 24 integration tests pass unmodified.
+- Cargo workspace root added (`Cargo.toml`, `Cargo.lock`) — `MODULE.bazel` now resolves `crate_universe` from workspace-level manifest, picking up both `services/api` and `libs/platform-core`.
+- UniFFI `ffi` feature: `NotesCore` (`uniffi::Object`) wrapping `InMemoryNotesStore`; `Note` gets `uniffi::Record`. 2 host unit tests (create-and-list, ordering). Feature-gated so Bazel `rust_library` compiles without uniffi.
+- Kotlin bindings generated via `tools/uniffi-bindgen/` (standalone crate, not in workspace). Committed to `apps/android/app/src/main/java/uniffi/platform_core/platform_core.kt`.
+- Android Gradle project scaffold: `settings.gradle.kts`, `build.gradle.kts`, `libs.versions.toml`, `AndroidManifest.xml`, `MainActivity.kt`, `NotesViewModel.kt` (wraps `NotesCore`), `NotesListScreen.kt` (Jetpack Compose list + inline compose row).
+- `tools/build-android.sh` — cargo-ndk cross-compile script (arm64-v8a + x86_64). Requires NDK + cargo-ndk.
+- `apps/android/CLAUDE.md` — file layout, run command, FFI update recipe.
+
+**Key decisions:**
+
+- **proto-free platform-core.** `platform_core::Note` mirrors `notes::v1::Note` (same 3 fields). Not coupled to prost — keeps Android `.so` small, avoids JNA-over-prost friction. Same tradeoff as Swift hand-Codables (Phase 4). `services/api/src/dto.rs` swaps `From<notes_proto::Note>` to `From<platform_core::Note>`.
+
+- **UniFFI `ffi` feature gate.** `uniffi::setup_scaffolding!()` and `#[derive(uniffi::Record)]` proc-macros read `Cargo.toml` via file I/O at compile time — Bazel's hermetic sandbox blocks this. Feature-gating isolates the FFI surface from the Bazel build; the Android `.so` is built with `cargo build --features ffi`. Same class of Bazel-ecosystem friction as Phase 4's `rules_proto_grpc_swift` → `CcInfo` breakage.
+
+- **`uniffi_testing` isolation.** The `cli` feature of `uniffi` pulls in `uniffi_testing`, which uses `env!("CARGO")` — also fails in Bazel. Bindgen binary moved to `tools/uniffi-bindgen/` (own `[workspace]`, not in main workspace) so it never pollutes the `crate_universe` dep graph.
+
+- **cargo-ndk over Bazel-native Android.** No `rules_uniffi` exists; `rules_android` + JNI + Compose is underdocumented in Bazel; NDK cross-compile via `cargo-ndk` is the industry pattern (used by Firefox application-services). Gradle owns the Android packaging; Bazel owns the Rust. Mirrors Phase 3 (`bazel build` + simctl) and Phase 4 (hand-Codables) scope-cut precedent.
+
+- **Android in-process (no HTTP to Axum).** Android calls `InMemoryNotesStore` via UniFFI directly. iOS already proves the REST wire. Two orthogonal portability stories, zero duplication of network stack setup.
+
+- **NDK not pre-installed.** Scope-cut per plan: `tools/build-android.sh` is the deliverable. Android project scaffolding + committed Kotlin bindings show the architecture. Instrumented test deferred to machine-with-NDK.
+
+**What worked:**
+- `cargo test -p platform_core --features ffi` — both FFI tests pass on the host (macOS dylib). 
+- Feature gate is clean: Bazel `rust_library` builds without uniffi dep; cargo with `--features ffi` activates the whole FFI surface. No wrapper crate, no proc-macro workarounds.
+- `tools/uniffi-bindgen/` standalone workspace: `cargo run --manifest-path tools/uniffi-bindgen/Cargo.toml -- generate` works without poisoning the main workspace.
+- Platform-core extraction was zero-behavior-change: 24 backend integration tests pass with no modifications.
+
 ## TODO: Fill in as phases progress
 
 - [x] **Phase 3 (Bazel bootstrap):** Done.
@@ -175,6 +206,7 @@ Three-agent review (ux-reviewer, user-flow-auditor, qa-engineer in worktree). Su
 - [x] **Phase 7 (iOS minimal):** SwiftUI state management (`@Observable` + `@MainActor`), APIClient pattern (actor), codegen integration (`import NotesSchema`). Reviewer swarm pending.
 - [x] **Phase 8 + 8.5 (iOS polish + reviewer response):** Cache design, error state UX. Swarm (naive-tester + junior-dev + perf-engineer) findings: `SwitchingNotesAPI` renamed + moved to TestDoubles, error-routing policy comment added to load(), @MainActor on formatter, @unchecked Sendable + nonisolated(unsafe) comments, draft-preserve comment.
 - [x] **Phase 9 (Docs pass):** README adds Configuration (`NOTES_API_BASE_URL`), explicit `NotesTests` label, bench command. architecture.md adds Middleware Stack section (4-layer order + rationale), inline bench numbers (~0.2ms p50 GET, ~0.3ms p50 POST), 3 tradeoff rows (DTOs vs pbjson, sync trait, Swift hand-Codables), cache-strategy clarification; TODO block removed. test-plan.md corrects integration path (`notes_integration.rs`), reframes Rust unit coverage as integration-only (24 cases), documents `tower::ServiceExt::oneshot` pattern, inlines bench baseline, clarifies iOS test file layout, drops stale TODO. Root `CLAUDE.md` replaces Phase-8 stale "no cache/no error states" with honest limits (no persistence, no TLS, no auth) + checks off phases 1–8.
+- [x] **Phase 11 (Bonus):** platform-core extraction, UniFFI feature gate, Android scaffold, cargo-ndk build script, Kotlin bindings committed. NDK absent → instrumented test deferred.
 - [ ] **Phase 12 (Final):** What would an interviewer probe first? Unfamiliar territory conquered?
 
 ## Alternatives Considered
@@ -190,6 +222,9 @@ Three-agent review (ux-reviewer, user-flow-auditor, qa-engineer in worktree). Su
 - [x] Bzlmod vs legacy WORKSPACE: Bazel 9.x Bzlmod-default; clean MODULE.bazel (Phase 1, 3).
 - [x] prost + swift-protobuf codegen: prost/rules_rust_prost clean; swift-protobuf chain broken on Bazel 9, scope-cut to hand-written Codables (Phase 4).
 - [x] tower middleware: concurrency limits, graceful shutdown (Phase 6). Built 4-layer stack (TraceLayer → RequestBodyLimitLayer → HandleErrorLayer → ConcurrencyLimitLayer → TimeoutLayer); order critical for error handling + observability. Bench validated p50/p99 latency under load.
+- [x] UniFFI proc-macros in Bazel sandbox: `setup_scaffolding!()` + `#[derive(uniffi::Record)]` read `Cargo.toml` via file I/O — blocked by Bazel sandbox. Feature-gated to cargo-only path (Phase 11). Pattern applies to any proc-macro that does file I/O outside declared srcs.
+- [x] Cargo workspace + crate_universe: migrated from single-manifest to workspace root Cargo.toml; `MODULE.bazel` crate.from_cargo updated to use `//:Cargo.lock`. multi-crate path dep resolution works cleanly.
+- [x] UniFFI `uniffi_testing` / `cli` feature isolation: `uniffi_testing` crate uses `env!("CARGO")` (Cargo binary path at compile time) — fails in Bazel. Moved bindgen binary to standalone workspace in `tools/uniffi-bindgen/` to avoid dep graph pollution.
 
 ## What Worked
 
@@ -202,6 +237,8 @@ Three-agent review (ux-reviewer, user-flow-auditor, qa-engineer in worktree). Su
 - **Punch-list audits (Phase 9).** Three Explore agents in parallel surfaced every stale line in docs. Cost: ~30s, zero risk. Triggered test coverage expansion (APIClient `.decoding`, ViewModel non-APIError, NotesListView state, Rust 413 boundary).
 
 ## What to Change
+
+- **platform-core hand-mirror also doesn't scale.** `platform_core::Note` mirrors proto exactly. Past ~10 messages maintaining 3 parallel mirrors (proto + Swift Codable + Rust model) is error-prone. A golden-JSON fixture asserting Rust encode → Kotlin decode would catch skew earlier. Long-term: unify via a code-generator wrapper or accept proto in the FFI surface with a prost-JNA bridge.
 
 - **Swift hand-Codables don't scale.** 50 lines for 4 messages is fine; past ~10–15 messages, maintaining a manual mirror alongside proto is error-prone. Revisit swift-protobuf chain (rules_proto_grpc_swift on Bazel <9.0) or invest in a code-generation wrapper that's less fragile than hand-mirroring.
 - **`.transport` error path hard to unit-test.** URLSession network failures are context-dependent (timeout config, network state, DNS). Mocking at the URLProtocol level is brittle. Consider: integration tests with a real URLSession against a local stub HTTP server, or a higher-level test double that doesn't require stubs at all.

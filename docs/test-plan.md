@@ -2,8 +2,19 @@
 
 ## Unit Tests
 
+### platform-core
+```
+bazel test //libs/platform-core:platform_core_test
+cargo test -p platform_core                    # no-ffi (matches Bazel)
+cargo test -p platform_core --features ffi     # validates FFI facade
+```
+
+Two `#[cfg(test)]` suites inside `libs/platform-core/src/ffi.rs`:
+- `ffi_create_and_list` — `NotesCore::new()` → `create_note("hello")` → `list_notes()` returns 1 note with body "hello", non-empty id, positive timestamp.
+- `ffi_multiple_notes_ordered_by_timestamp` — 2 creates → `list_notes()` in ascending `created_at_ms` order.
+
 ### Rust Backend
-No separate unit-test target — the `NotesStore` trait, `InMemoryNotesStore`, `ApiError` → `IntoResponse`, and DTO conversions are all exercised end-to-end through the integration suite below (handlers run their real store + error paths in-process via `tower::ServiceExt::oneshot`). Keeps a single test target + covers every code path reachable from HTTP. Revisit when persistence swaps in and a store impl grows logic not reachable via routes.
+No separate unit-test target — the `NotesStore` trait (re-exported from platform-core), `InMemoryNotesStore`, `ApiError` → `IntoResponse`, and DTO conversions are all exercised end-to-end through the integration suite below (handlers run their real store + error paths in-process via `tower::ServiceExt::oneshot`). Keeps a single test target + covers every code path reachable from HTTP. Revisit when persistence swaps in and a store impl grows logic not reachable via routes.
 
 ### iOS (Phase 8 — done)
 Two test files + one support file under `apps/ios/Tests/`:
@@ -56,9 +67,23 @@ Requires `oha`: `brew install oha`. Measures end-to-end HTTP latency including t
 
 Expected baseline (local, M4 MacBook Pro, in-memory store): ~0.2ms p50 GET, ~0.3ms p50 POST. Middleware overhead unmeasurable in the noise. Treat as a regression signal — deviations >10× warrant investigation.
 
+## Android (Phase 11)
+
+No instrumented test runnable without Android NDK + `cargo-ndk` installed.
+Architecture is tested through the platform-core unit tests (same `InMemoryNotesStore`, same `Note` struct).
+
+**Future smoke test** (when NDK present):
+```bash
+./tools/build-android.sh       # cross-compile libplatform_core.so
+cd apps/android
+./gradlew connectedAndroidTest # single SmokeTest: createNote → listNotes returns 1
+```
+The `SmokeTest` would call `NotesCore().createNote("hello")`, assert body + non-empty id, then `listNotes()` returns 1 note.
+
 ## Failure Modes
 
 - Backend unreachable → iOS shows `.error` inline Retry row (no cache) or `lastLoadError` alert (stale cache kept)
 - Empty list → iOS shows "No notes yet" placeholder
 - Invalid body → backend 400; iOS client guards trim+empty before send
+- Android `libplatform_core.so` missing → JNA `UnsatisfiedLinkError` at startup; run `./tools/build-android.sh` first
 

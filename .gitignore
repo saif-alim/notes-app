@@ -27,6 +27,15 @@ Package.resolved
 # Proto codegen (generated, checked via codegen rule)
 **/gen/
 
+# Android — native libs built by tools/build-android.sh (requires NDK + cargo-ndk)
+apps/android/app/src/main/jniLibs/
+
+# Android — Gradle build outputs
+apps/android/.gradle/
+apps/android/build/
+apps/android/app/build/
+apps/android/local.properties
+
 # macOS
 .DS_Store
 .AppleDouble
