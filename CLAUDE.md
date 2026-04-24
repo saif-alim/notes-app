@@ -25,11 +25,12 @@ Notes app: SwiftUI iOS client + Rust/Axum backend + shared .proto schema, built 
 
 ```bash
 bazel build //...               # build all
-bazel run //services/api:notes_api   # start backend on :3000
+bazel run //services/api:notes_api   # start backend on :3000 (keep running)
 bazel test //...                # Rust tests (platform-core + integration)
 bazel test //apps/ios:NotesTests     # iOS XCTest suite (manual tag — explicit invoke)
 
 # iOS: ./tools/run-ios-sim.sh   (builds via Bazel, installs on simulator)
+# Backend must already be running on :3000 — the script does not start it.
 ```
 
 ## How to add

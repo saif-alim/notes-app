@@ -12,10 +12,11 @@ Notes app: SwiftUI iOS client + Rust/Axum backend + shared .proto schema, built 
 # Build everything
 bazel build //...
 
-# Run backend server (starts on :3000)
+# Terminal 1 — start backend (keep running on :3000)
 bazel run //services/api:notes_api
 
-# Run iOS app in simulator
+# Terminal 2 — build + install + launch iOS app on simulator
+# (backend must be reachable on :3000 or the app shows "can't reach server")
 ./tools/run-ios-sim.sh
 ```
 
