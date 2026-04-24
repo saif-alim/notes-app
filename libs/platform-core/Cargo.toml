@@ -3,6 +3,20 @@ name = "platform_core"
 version = "0.1.0"
 edition = "2021"
 
+# cdylib: used when building the Android .so via cargo (--features ffi).
+# Bazel uses rust_shared_library for the .so; the Bazel rust_library target
+# uses rlib (no cdylib crate-type needed in the Bazel path).
+[lib]
+crate-type = ["lib", "cdylib"]
+
+[features]
+# ffi: enables uniffi scaffolding + proc-macro annotations.
+# NOT enabled in the default Bazel rust_library build (keeps Bazel sandbox
+# free of uniffi's Cargo.toml proc-macro file I/O).
+# Enabled for the Android .so: cargo build --features ffi --target <android-triple>
+ffi = ["dep:uniffi"]
+
 [dependencies]
 uuid = { version = "1", features = ["v4"] }
 parking_lot = "0.12"
+uniffi = { version = "0.28", optional = true }
