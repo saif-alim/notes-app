@@ -33,12 +33,16 @@
 
 ## Request Path: iOS → Axum → Store
 
-1. User taps "Add note"
-2. SwiftUI posts `POST /notes { body: "..." }` via APIClient
-3. Axum handler receives, validates, calls `NotesStore::insert()`
-4. In-memory `RwLock<HashMap>` appends note
-5. Response serialized as JSON → iOS
-6. NotesViewModel updates, SwiftUI re-renders
+1. User taps "Add note".
+2. SwiftUI posts `POST /notes { body: "..." }` via APIClient (Phase 7).
+3. Axum `create_note` handler (in `services/api/src/routes.rs`) receives the `CreateNoteRequestDto`, validates non-empty body, calls `NotesStore::create(body)`.
+4. `InMemoryNotesStore` generates a UUID + Unix-seconds timestamp, inserts into `RwLock<HashMap<String, Note>>`, returns the `Note`.
+5. Handler converts `Note` → `CreateNoteResponseDto` via `From` impl, serializes as JSON with 201 Created.
+6. `NotesViewModel` (Phase 7) updates state, SwiftUI re-renders.
+
+`GET /notes` flows the same way minus the create step; `list_notes` handler calls `NotesStore::list()` (sorted by `created_at_unix`), converts to `ListNotesResponseDto`, returns 200.
+
+DTO layer decouples the wire format from proto-generated types — see `docs/retrospective.md` Phase 5 entry.
 
 ## Schema Story
 

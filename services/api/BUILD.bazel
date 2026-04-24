@@ -24,4 +24,14 @@ rust_binary(
     ],
 )
 
-# rust_test added in commit 4 once tests/ directory is populated
+rust_test(
+    name = "integration_test",
+    srcs = glob(["tests/**/*.rs"]),
+    edition = "2021",
+    deps = [":notes_api_lib"] + all_crate_deps(
+        normal = True,
+        normal_dev = True,
+    ) + [
+        "//libs/schema:notes_rust_proto",
+    ],
+)

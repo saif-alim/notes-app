@@ -47,10 +47,23 @@
 - **What worked:** rules_rust_prost Bzlmod integration is excellent. prost-generated structs use `::prost::alloc` types — no std-vs-no-std surprises for Phase 5 Axum handlers.
 - **Advisor note:** This was a judgment call made without invoking the Opus advisor subagent because the cascade failure was observable directly (two Starlark errors in two different transitive deps, same root cause). Advisor was appropriate for the Phase 3 Plan A/B decision where evidence was mixed; here the signal was unambiguous.
 
+### Phase 5 (Backend minimal)
+- **Surface:** `GET /notes` (list; ascending `created_at_unix`), `POST /notes` (create; 400 on empty body; 201 on success). `InMemoryNotesStore` behind `NotesStore` trait, `RwLock<HashMap>` backing. UUID v4 ids. Unix-seconds timestamps.
+- **Toolchain bring-up gotchas (both fixed in commit 1):**
+  - `crate_universe` extension requires a **root `BUILD.bazel`** to locate the workspace path. Root package is empty but required.
+  - `Cargo.lock` must be committed — removed the blanket gitignore rule from Phase 1. crate_universe reads it via `crate.from_cargo(cargo_lockfile = ...)` to pin transitive deps deterministically.
+- **JSON wire format — DTOs vs pbjson:** Opus advisor called. Verdict: DTOs + `From` impls. pbjson would need a custom aspect or genrule in the rust_prost_library chain, costing hours of build-infra maintenance. Hand-DTOs for 4 messages are ~50 lines, symmetric with Swift side's hand-Codables, and give us a wire-format layer we can evolve independently of the proto schema. Revisit at ~20 messages.
+- **`NotesStore` trait is sync, not async:** In-memory ops don't await anything. Keeping it sync avoids pulling `async-trait` and avoids the `Pin<Box<dyn Future>>` footgun at trait boundaries. If Phase 8+ swaps to SQLite/Postgres, flip to native-async-fn-in-traits (Rust 1.75+ — toolchain supports it).
+- **Handler state:** `Arc<dyn NotesStore>`. `with_state::<()>(store)` turbofish required — Axum can't otherwise infer the unit `S` parameter.
+- **Integration testing:** `tower::ServiceExt::oneshot` drives the router with no network. Three tests (round-trip, empty-body rejection, order invariant) complete in 0.3s. No separate test fixture infra needed.
+- **Cold vs warm build:** 26s cold (downloads axum 0.8.9, tokio 1.52.1, tower 0.5.3, serde 1.0.228 + transitive tree, compiles each). Subsequent builds are 1–2s via Bazel's action cache.
+- **What worked:** rules_rust + Bzlmod + crate_universe is clean once the two bring-up gotchas are past. Zero drift between `Cargo.toml` and Bazel's resolved deps.
+
 ## TODO: Fill in as phases progress
 
-- [ ] **Phase 3 (Bazel bootstrap):** ✅ Done — see above.
-- [ ] **Phase 4 (Shared schema):** ✅ Done — see above.
+- [x] **Phase 3 (Bazel bootstrap):** Done.
+- [x] **Phase 4 (Shared schema):** Done.
+- [x] **Phase 5 (Backend minimal):** Done.
 - [ ] **Phase 5 (Backend minimal):** Axum ergonomics, Tokio learning curve, NotesStore trait design.
 - [ ] **Phase 6 (Backend hardening):** tower middleware tuning, tracing setup, bench insights.
 - [ ] **Phase 7 (iOS minimal):** SwiftUI state management, APIClient pattern, codegen integration.
