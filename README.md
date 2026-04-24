@@ -19,6 +19,13 @@ bazel run //services/api:notes_api
 ./tools/run-ios-sim.sh
 ```
 
+## Configuration
+
+- `NOTES_API_BASE_URL` — override backend URL in the iOS app. Defaults to `http://127.0.0.1:3000`.
+  ```bash
+  NOTES_API_BASE_URL=http://192.168.1.42:3000 ./tools/run-ios-sim.sh
+  ```
+
 ## Repo Map
 
 - `apps/ios/` — SwiftUI app (MVVM)
@@ -36,9 +43,13 @@ bazel run //services/api:notes_api
 ## Test Commands
 
 ```bash
-bazel test //...               # all tests
-bazel test //services/api/...  # backend tests only
-bazel test //apps/ios/...      # iOS tests only
+bazel test //...                     # all tests
+bazel test //services/api/...        # backend unit + integration tests
+bazel test //apps/ios/...            # iOS tests (all)
+bazel test //apps/ios:NotesTests     # iOS XCTest suite (explicit label)
+
+# Load smoke test (backend must be running; requires `brew install oha`)
+bash tools/bench/bench.sh
 ```
 
 ## Known Limitations

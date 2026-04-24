@@ -551,3 +551,12 @@ async fn put_notes_method_not_allowed() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::METHOD_NOT_ALLOWED);
 }
+
+/// POST /notes with body >64KB (RequestBodyLimitLayer enforces MAX_BODY_BYTES) returns 413.
+#[tokio::test]
+async fn post_oversized_body_returns_413() {
+    let huge_body: String = "a".repeat(65 * 1024); // 65KB, exceeds 64KB limit
+    let payload = format!(r#"{{"body":"{}"}}"#, huge_body);
+    let (status, _json) = post_note(app(), &payload).await;
+    assert_eq!(status, StatusCode::PAYLOAD_TOO_LARGE);
+}

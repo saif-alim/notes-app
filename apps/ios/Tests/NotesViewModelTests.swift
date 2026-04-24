@@ -73,4 +73,32 @@ final class NotesViewModelTests: XCTestCase {
         await vm.create(body: "   ")
         XCTAssertEqual(api.createCallCount, 0)
     }
+
+    // MARK: Non-APIError catch arms
+
+    func test_load_nonAPIError_wrapsIntoTransport() async {
+        let api = GenericErrorNotesAPI()
+        let vm = NotesViewModel(api: api)
+
+        await vm.load()
+        // Non-APIError throws are wrapped into .transport
+        if case .error(.transport) = vm.state {
+            // Expected
+        } else {
+            XCTFail("Expected .error(.transport), got \(vm.state)")
+        }
+    }
+
+    func test_create_nonAPIError_wrapsIntoTransport() async {
+        let api = GenericErrorNotesAPI()
+        let vm = NotesViewModel(api: api)
+
+        await vm.create(body: "test")
+        // Non-APIError throws are wrapped into .transport
+        if case .transport = vm.lastCreateError {
+            // Expected
+        } else {
+            XCTFail("Expected .transport, got \(String(describing: vm.lastCreateError))")
+        }
+    }
 }

@@ -155,16 +155,26 @@ Three-agent review (ux-reviewer, user-flow-auditor, qa-engineer in worktree). Su
 - Opus advisor call on JSON-wire format (DTOs vs pbjson) → DTOs. Verified correct call: the unused From-impls that shipped in the first cut were the exact dead-code smell the advisor predicted "only hurts if you over-engineer the mirror layer." Deleted them in 5.5.
 - Did not invoke advisor for the review triage — decisions were unambiguous (both reviewers converged on the same 🔴 list).
 
+### Phase 9 (Docs pass)
+
+- **Audit method:** three Explore agents in parallel (one per doc — README, architecture, test-plan) against current code state. Findings triaged into punch list, then edits applied from retrospective as single source of truth.
+- **README.md:** added `NOTES_API_BASE_URL` Configuration section (Phase 8 injection point was undocumented), promoted `bazel test //apps/ios:NotesTests` from glob to explicit label, added `bash tools/bench/bench.sh` under Test Commands. Quickstart labels already matched `BUILD.bazel` — no breakage.
+- **docs/architecture.md:** deleted stale "component diagram TODO" checklist (diagram exists since Phase 7). Added **Middleware Stack** subsection with the 4-layer order (`TraceLayer → RequestBodyLimitLayer(64KB) → HandleErrorLayer → ConcurrencyLimitLayer(100) → TimeoutLayer(5s)`) + why-each-sits-where. Inlined bench numbers from Phase 6 (`~0.2ms p50 GET, ~0.3ms p50 POST on M4`) instead of just linking `tools/bench/`. Extended Tradeoffs table with three rows the retro had but architecture.md didn't: DTOs vs pbjson, sync vs `async_trait` `NotesStore`, hand-Codables vs `rules_proto_grpc_swift`. Clarified Phase 8 cache = `[Note]` inside `.loaded(notes)` (no TTL, no separate struct); `lastLoadError`/`lastCreateError` orthogonal to State so failures never clobber the list.
+- **docs/test-plan.md:** fixed wrong path (`integration_test.rs` → `notes_integration.rs`). Reframed Rust unit-test section — no `#[cfg(test)]` modules exist in `src/`; store/error/DTO logic is exercised end-to-end through the 24 integration tests via `tower::ServiceExt::oneshot`. Expanded Backend integration coverage list (round-trip, validation, Content-Type/parsing, Unicode, 413/404/405, concurrent writes). Inlined bench baseline with a "deviations >10× warrant investigation" rule-of-thumb. Clarified iOS test layout: two `.swift` files + `TestDoubles.swift` support, three `XCTestCase` classes. Dropped stale TODO block (all items were already checked).
+- **CLAUDE.md (root):** replaced "No loading/error states yet (Phase 8)" + "No caching (Phase 8)" with the honest current limits (no persistence, no TLS, no auth, simulator-only). Checked off phases 1–8 in build-phases table; marked Phase 9 as current.
+- **What worked:** punch-list-from-swarm cadence. Three Explore agents ran in parallel in ~30s and surfaced every stale line + path. Pure doc edits, no code risk.
+- **Scope boundary respected:** did not touch retro's `## What Worked` / `## What to Change` finalize sections — those are Phase 10 per PLAN.md:49.
+- **Deferred:** Phase 10 is the coherence pass on this retrospective itself (merge duplicates, collapse reviewer-swarm sub-entries, write final narrative). Phase 11 (bonus) and Phase 12 (fresh-clone verify + `/unleash`) remain.
+
 ## TODO: Fill in as phases progress
 
 - [x] **Phase 3 (Bazel bootstrap):** Done.
 - [x] **Phase 4 (Shared schema):** Done.
 - [x] **Phase 5 + 5.5 (Backend minimal + reviewer response):** Done.
-- [ ] **Phase 5 (Backend minimal):** Axum ergonomics, Tokio learning curve, NotesStore trait design.
 - [x] **Phase 6 (Backend hardening):** tower middleware tuning, tracing setup, bench insights. Reviewer swarm fixes applied (HandleErrorLayer, RequestBodyLimitLayer, lock scope).
 - [x] **Phase 7 (iOS minimal):** SwiftUI state management (`@Observable` + `@MainActor`), APIClient pattern (actor), codegen integration (`import NotesSchema`). Reviewer swarm pending.
 - [x] **Phase 8 + 8.5 (iOS polish + reviewer response):** Cache design, error state UX. Swarm (naive-tester + junior-dev + perf-engineer) findings: `SwitchingNotesAPI` renamed + moved to TestDoubles, error-routing policy comment added to load(), @MainActor on formatter, @unchecked Sendable + nonisolated(unsafe) comments, draft-preserve comment.
-- [ ] **Phase 9 (Docs pass):** README clarity, architecture diagram completeness, test-plan accuracy.
+- [x] **Phase 9 (Docs pass):** README adds Configuration (`NOTES_API_BASE_URL`), explicit `NotesTests` label, bench command. architecture.md adds Middleware Stack section (4-layer order + rationale), inline bench numbers (~0.2ms p50 GET, ~0.3ms p50 POST), 3 tradeoff rows (DTOs vs pbjson, sync trait, Swift hand-Codables), cache-strategy clarification; TODO block removed. test-plan.md corrects integration path (`notes_integration.rs`), reframes Rust unit coverage as integration-only (24 cases), documents `tower::ServiceExt::oneshot` pattern, inlines bench baseline, clarifies iOS test file layout, drops stale TODO. Root `CLAUDE.md` replaces Phase-8 stale "no cache/no error states" with honest limits (no persistence, no TLS, no auth) + checks off phases 1–8.
 - [ ] **Phase 12 (Final):** What would an interviewer probe first? Unfamiliar territory conquered?
 
 ## Alternatives Considered

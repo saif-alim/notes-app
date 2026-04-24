@@ -82,6 +82,26 @@ final class APIClientTests: XCTestCase {
             }
         }
     }
+
+    // MARK: Decoding errors
+
+    func test_decodingError_onMalformedJSON() async throws {
+        StubURLProtocol.handler = { request in
+            let malformed = #"{"notes": [malformed json]}"#
+            return stubResponse(statusCode: 200, body: malformed, for: request.url!)
+        }
+        let client = APIClient(baseURL: baseURL, session: makeSession())
+        do {
+            _ = try await client.listNotes()
+            XCTFail("Expected .decoding throw")
+        } catch let error as APIError {
+            if case .decoding = error {
+                // Expected
+            } else {
+                XCTFail("Expected .decoding, got \(error)")
+            }
+        }
+    }
 }
 
 // MARK: - APIError.userMessage

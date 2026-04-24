@@ -65,15 +65,15 @@ bazel test //...                # run all tests
 
 | Phase | Goal |
 |-------|------|
-| 1 | Scaffold: repo skeleton, Bazel stubs, doc outlines |
-| 2 | Agent tooling: MCP setup, context-mode, hooks |
-| 3 | Bazel bootstrap: rules_rust/apple/xcodeproj, iOS path decision |
-| 4 | Shared schema: `.proto` codegen for Rust + Swift |
-| 5 | Backend minimal: Axum + NotesStore + 2 endpoints |
-| 6 | Backend hardening: tower middleware, tracing, bench |
-| 7 | iOS minimal: SwiftUI, views, viewmodels, round-trip |
-| 8 | iOS polish: error/loading states, cache, XCTest |
-| 9 | Docs pass: README verify, architecture finalize, test-plan complete |
+| 1 | Scaffold: repo skeleton, Bazel stubs, doc outlines ✓ |
+| 2 | Agent tooling: MCP setup, context-mode, hooks ✓ |
+| 3 | Bazel bootstrap: rules_rust/apple/xcodeproj, iOS path decision ✓ |
+| 4 | Shared schema: `.proto` codegen for Rust + Swift ✓ |
+| 5 | Backend minimal: Axum + NotesStore + 2 endpoints ✓ |
+| 6 | Backend hardening: tower middleware, tracing, bench ✓ |
+| 7 | iOS minimal: SwiftUI, views, viewmodels, round-trip ✓ |
+| 8 | iOS polish: error/loading states, cache, XCTest ✓ |
+| 9 | Docs pass: README verify, architecture finalize, test-plan complete ← current |
 | 10 | Retro finalize: coherence pass on living doc |
 | 11 | **Bonus:** platform-core + Android (only if 1–10 solid) |
 | 12 | Final verify: fresh-clone smoke test, git history review |
@@ -88,10 +88,10 @@ Full details: [PLAN.md](PLAN.md).
 
 ## Known limitations
 
-- In-memory storage only (Phase 4+: pluggable backend)
-- Simulator only (Phase 3+: device support)
-- No loading/error states yet (Phase 8)
-- No caching (Phase 8)
+- No persistence — in-memory `NotesStore` only (trait designed for SQLite/Postgres swap)
+- Simulator only — no device provisioning
+- Plaintext HTTP to localhost; ATS exception active, no TLS
+- Single user, no auth
 
 ## Questions?
 

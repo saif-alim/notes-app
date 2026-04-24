@@ -85,6 +85,24 @@ final class SucceedOnceThenFailNotesAPI: NotesAPI, @unchecked Sendable {
     }
 }
 
+// MARK: - GenericErrorNotesAPI
+
+// Throws a non-APIError (generic Error) to test the catch { ... } fallback path.
+// @unchecked Sendable: immutable after init; safe to call from any context.
+final class GenericErrorNotesAPI: NotesAPI, @unchecked Sendable {
+    struct GenericError: Error {
+        let message: String
+    }
+
+    func listNotes() async throws -> [Note] {
+        throw GenericError(message: "generic error")
+    }
+
+    func createNote(body: String) async throws -> Note {
+        throw GenericError(message: "generic error")
+    }
+}
+
 // MARK: - Helpers
 
 func makeSession() -> URLSession {

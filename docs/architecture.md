@@ -46,6 +46,20 @@
 
 DTO layer decouples the wire format from proto-generated types — see `docs/retrospective.md` Phase 5 entry.
 
+## Middleware Stack
+
+Tower `ServiceBuilder` composes four layers in `services/api/src/lib.rs`. Order is load-bearing:
+
+```
+TraceLayer → RequestBodyLimitLayer(64KB) → HandleErrorLayer → ConcurrencyLimitLayer(100) → TimeoutLayer(5s) → router
+```
+
+- **TraceLayer** (outermost) — captures full request lifecycle including middleware failures into `tracing` spans. Must see errors returned by inner layers.
+- **RequestBodyLimitLayer(64KB)** — rejects oversized bodies with 413 before they hit a handler. Closes the DoS surface flagged in Phase 5.5.
+- **HandleErrorLayer** — bridges `tower::Error` (e.g. `Overloaded` from `ConcurrencyLimitLayer`) into a 503 HTTP response so downstream layers aren't exposed to the `BoxError` type.
+- **ConcurrencyLimitLayer(100)** — caps in-flight requests. Needs the error bridge above to surface `Overloaded` as 503.
+- **TimeoutLayer(5s)** (innermost) — per-request wall-clock bound. Innermost so it measures handler work, not middleware queueing.
+
 ## iOS State Pattern
 
 `@Observable` (Observation framework, iOS 17+) + MVVM. ViewModel is `@MainActor` so all state mutations hop onto the main thread before SwiftUI observes them.
@@ -55,7 +69,7 @@ DTO layer decouples the wire format from proto-generated types — see `docs/ret
 .idle → .loading → .loaded([Note])
                 ↘ .error(APIError)
 ```
-Stale-while-revalidate: on pull-to-refresh with cached data, `.loaded` stays visible; network failures set `lastLoadError` → alert. Create failures set `lastCreateError` → alert; draft preserved for retry.
+Stale-while-revalidate: "cache" = the `[Note]` array already held inside `.loaded(notes)` — no separate store, no TTL. On pull-to-refresh failure the `.loaded` state stays visible and `lastLoadError` surfaces the failure via alert. Create failures set `lastCreateError` → alert; draft preserved for retry. `lastLoadError` / `lastCreateError` are orthogonal to the State enum so a transient failure never clobbers the list.
 
 `NotesAPI` protocol (`Sendable`) decouples `NotesViewModel` from `URLSession` — allows deterministic `FakeNotesAPI` in XCTests without `URLProtocol` stubs.
 
@@ -114,6 +128,9 @@ xcrun simctl launch booted com.notes.app
 | iOS build | rules_xcodeproj (Plan A) | Bazel is source of truth for iOS graph | sh_binary wrapping xcodebuild (Plan B) |
 | iOS framework | SwiftUI | Modern, least boilerplate | UIKit (more code) |
 | Backend | Axum + Tokio | Best ergonomics, ecosystem | Actix (more friction) |
+| JSON wire format | Hand-written DTOs + `From<Note>` | Symmetric with Swift hand-Codables; no build-infra cost; wire layer evolves independently of proto | `pbjson-types` via custom aspect |
+| `NotesStore` trait | Sync methods | In-memory ops don't await; avoids `async-trait` + `Pin<Box<Fut>>` at trait boundary | Native `async fn in traits` — flip when SQLx lands |
+| Swift schema codegen | Hand-written `Codable` structs | `rules_proto_grpc_swift` chain broken on Bazel 9 (`CcInfo` removed); 50 lines < ruleset archaeology | `swift-protobuf` via rules_proto_grpc_swift |
 
 ## Performance Notes
 
@@ -124,10 +141,9 @@ xcrun simctl launch booted com.notes.app
 - HTTP/2 keep-alive via hyper
 - Structured logging with tracing
 
-**Benchmarks:** see `tools/bench/` and `docs/test-plan.md` (Phase 6+).
+**Benchmarks (local, M4 MacBook Pro, in-memory store, Tokio async runtime):**
+- `GET /notes`: ~0.2ms p50
+- `POST /notes`: ~0.3ms p50
+- Middleware overhead: unmeasurable in the noise
 
-## TODO
-
-- [ ] Component diagram visual (ASCII OK for now)
-- [ ] Request flow diagram (mermaid or ASCII)
-- [x] Filled in at end of Phase 5 (backend) and Phase 7 (iOS)
+Reproduction: `bash tools/bench/bench.sh` (drives 1000 GET @ 20c + 500 POST @ 10c via `oha`). See `docs/test-plan.md`.
