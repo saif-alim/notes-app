@@ -1,10 +1,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::{routing::get, Router};
+use axum::{http::StatusCode, routing::get, Router};
 use tower::ServiceBuilder;
 use tower::limit::ConcurrencyLimitLayer;
-use tower_http::{timeout::TimeoutLayer, trace::TraceLayer};
+use tower::util::HandleErrorLayer;
+use tower_http::{limit::RequestBodyLimitLayer, timeout::TimeoutLayer, trace::TraceLayer};
 
 pub mod dto;
 pub mod error;
@@ -16,8 +17,9 @@ pub use store::{InMemoryNotesStore, NotesStore};
 
 use routes::{create_note, list_notes, AppState};
 
-const MAX_CONCURRENT: usize = 100;
-const REQUEST_TIMEOUT_SECS: u64 = 5;
+pub const MAX_CONCURRENT: usize = 100;
+pub const REQUEST_TIMEOUT_SECS: u64 = 5;
+pub const MAX_BODY_BYTES: usize = 64 * 1024;
 
 pub fn create_router(store: Arc<dyn NotesStore>) -> Router {
     Router::new()
@@ -26,6 +28,10 @@ pub fn create_router(store: Arc<dyn NotesStore>) -> Router {
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
+                .layer(RequestBodyLimitLayer::new(MAX_BODY_BYTES))
+                .layer(HandleErrorLayer::new(|_: tower::BoxError| async {
+                    StatusCode::SERVICE_UNAVAILABLE
+                }))
                 .layer(ConcurrencyLimitLayer::new(MAX_CONCURRENT))
                 .layer(TimeoutLayer::new(Duration::from_secs(REQUEST_TIMEOUT_SECS)))
         )

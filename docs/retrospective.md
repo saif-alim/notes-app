@@ -83,7 +83,12 @@ Three-agent review (api-designer, staff-engineer, qa-engineer in worktree) ran e
 - **oha bench script:** `tools/bench/bench.sh` drives 1000 `GET /notes` (20c) + 500 `POST /notes` (10c) against local backend. Warms up first (10 req) to exclude Tokio reactor spin-up latency. Measures end-to-end including middleware. Requires `brew install oha`.
 - **What worked:** Tower middleware composition is clean. The four-layer stack is self-documenting; each layer has one responsibility. `HandleErrorLayer` bridge correctly converts `tower::limit::Error` to a 503 response without side-effect.
 - **Benchmark results (local, M4 MacBook Pro):** ~0.2ms p50 for GET, ~0.3ms p50 for POST (sub-ms with Tokio async runtime, in-memory store, no I/O). Middleware overhead unmeasurable in the noise.
-- **What to watch:** ConcurrencyLimit cap at 100 is conservative for 2-endpoint service; Phase 7+ mobile client load testing may justify increase to 1000. RequestBodyLimitLayer (flagged in Phase 5.5) deferred — currently no cap on POST body size.
+- **Phase 6 reviewer swarm fixes (perf + security + reuse, three agents):**
+  - `HandleErrorLayer` was documented but missing from `lib.rs` — wired in (TraceLayer → RequestBodyLimitLayer → HandleErrorLayer → ConcurrencyLimitLayer → TimeoutLayer). ConcurrencyLimit errors now correctly return 503.
+  - `RequestBodyLimitLayer(64KB)` added — closes the DoS surface flagged in Phase 5.5. POST body >64KB → 413.
+  - `list()` lock scope fixed — `sort_by_key` now runs after read guard drops, not while holding it.
+  - Middleware constants (`MAX_CONCURRENT`, `REQUEST_TIMEOUT_SECS`, `MAX_BODY_BYTES`) made `pub` to eliminate doc drift.
+- **What to watch:** ConcurrencyLimit cap at 100 is conservative for 2-endpoint service; Phase 7+ mobile client load testing may justify increase to 1000.
 - **Tradeoff:** Skipped criterion/divan microbenchmarks (too much Bazel plumbing for handler hot-paths); system-level `oha` smoke test is sufficient for this scope.
 
 **qa-engineer contribution:** expanded integration tests 3 → 24. Covers malformed JSON, missing/null/non-string `body`, wrong/missing Content-Type, whitespace variants, Unicode (emoji, RTL, CJK), large bodies, unknown-route 404, method-not-allowed 405, concurrent-write safety. 24/24 passing after Phase 5.5 fixes (including the flipped whitespace-trim assertion).
@@ -98,7 +103,7 @@ Three-agent review (api-designer, staff-engineer, qa-engineer in worktree) ran e
 - [x] **Phase 4 (Shared schema):** Done.
 - [x] **Phase 5 + 5.5 (Backend minimal + reviewer response):** Done.
 - [ ] **Phase 5 (Backend minimal):** Axum ergonomics, Tokio learning curve, NotesStore trait design.
-- [ ] **Phase 6 (Backend hardening):** tower middleware tuning, tracing setup, bench insights.
+- [x] **Phase 6 (Backend hardening):** tower middleware tuning, tracing setup, bench insights. Reviewer swarm fixes applied (HandleErrorLayer, RequestBodyLimitLayer, lock scope).
 - [ ] **Phase 7 (iOS minimal):** SwiftUI state management, APIClient pattern, codegen integration.
 - [ ] **Phase 8 (iOS polish):** Cache design, error state UX.
 - [ ] **Phase 9 (Docs pass):** README clarity, architecture diagram completeness, test-plan accuracy.

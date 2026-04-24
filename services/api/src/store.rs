@@ -30,8 +30,8 @@ impl Default for InMemoryNotesStore {
 
 impl NotesStore for InMemoryNotesStore {
     fn list(&self) -> Vec<Note> {
-        let guard = self.notes.read();
-        let mut out: Vec<Note> = guard.values().cloned().collect();
+        let mut out: Vec<Note> = self.notes.read().values().cloned().collect();
+        // guard dropped; sort outside lock so writers don't block during O(N log N)
         out.sort_by_key(|n| n.created_at_ms);
         out
     }

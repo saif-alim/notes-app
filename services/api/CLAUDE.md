@@ -68,11 +68,15 @@ Single code path for errors across endpoints. Extend by adding a variant + match
 
 ## Middleware (Phase 6+)
 
-Tower middleware stack in `src/lib.rs::create_router` (built via `ServiceBuilder`):
-- **TraceLayer** (outermost): emits `tower_http` spans per request. Output includes latency, method, path, status.
-- **HandleErrorLayer**: catches `tower::limit::Error` from ConcurrencyLimitLayer (when load-shedding) and converts to 503 Service Unavailable.
-- **ConcurrencyLimitLayer**: rejects incoming requests when >100 are in-flight; emits an error that HandleErrorLayer catches.
-- **TimeoutLayer** (innermost): enforces 5s wall-clock timeout per request; auto-returns 408 if exceeded.
+Tower middleware stack in `src/lib.rs::create_router` (built via `ServiceBuilder`). Constants: `MAX_CONCURRENT=100`, `REQUEST_TIMEOUT_SECS=5`, `MAX_BODY_BYTES=65536`.
+
+| Layer | Position | What it does |
+|-------|----------|--------------|
+| `TraceLayer` | outermost | emits `tower_http` spans; captures full latency + status |
+| `RequestBodyLimitLayer` | 2nd | rejects request bodies >64KB with 413; no handler work done |
+| `HandleErrorLayer` | 3rd | catches `tower::BoxError` from ConcurrencyLimitLayer → 503 |
+| `ConcurrencyLimitLayer` | 4th | rejects when >100 requests in-flight |
+| `TimeoutLayer` | innermost | 5s wall-clock timeout per request; returns 408 if exceeded |
 
 Control log level via `RUST_LOG` env var:
 ```bash
