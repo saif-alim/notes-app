@@ -4,25 +4,27 @@
 
 ## Decisions Made (from PLAN.md)
 
-| Decision | Choice | Rationale | Status |
-|----------|--------|-----------|--------|
-| Product | Notes app | 2 endpoints, trivial schema/UI; caching & optimistic updates as crit talking points | ✓ Locked |
-| iOS framework | SwiftUI + MVVM | Fastest, least boilerplate for single screen | ✓ Locked |
-| Backend framework | Axum + Tokio | Best ergonomics + ecosystem; non-blocking I/O | ✓ Locked |
-| Storage | In-memory `RwLock<HashMap>` behind `NotesStore` trait | Zero setup; allows pluggable swap | ✓ Locked |
-| Schema | `.proto` → `prost` (Rust) + `swift-protobuf` (iOS) | Single source of truth; machine-readable | ✓ Locked |
-| Bazel-iOS | Smoke-test `rules_xcodeproj`; Plan B: `sh_binary` wrapping `xcodebuild` | "Meaningfully involved" > "exclusively" | ✓ Phase 3 |
-| Build tooling | Bazel (Bzlmod) | Unified mono-repo for Rust + Swift + schema codegen | ✓ Locked |
+| Decision          | Choice                                                                  | Rationale                                                                           | Status    |
+| ----------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | --------- |
+| Product           | Notes app                                                               | 2 endpoints, trivial schema/UI; caching & optimistic updates as crit talking points | ✓ Locked  |
+| iOS framework     | SwiftUI + MVVM                                                          | Fastest, least boilerplate for single screen                                        | ✓ Locked  |
+| Backend framework | Axum + Tokio                                                            | Best ergonomics + ecosystem; non-blocking I/O                                       | ✓ Locked  |
+| Storage           | In-memory `RwLock<HashMap>` behind `NotesStore` trait                   | Zero setup; allows pluggable swap                                                   | ✓ Locked  |
+| Schema            | `.proto` → `prost` (Rust) + `swift-protobuf` (iOS)                      | Single source of truth; machine-readable                                            | ✓ Locked  |
+| Bazel-iOS         | Smoke-test `rules_xcodeproj`; Plan B: `sh_binary` wrapping `xcodebuild` | "Meaningfully involved" > "exclusively"                                             | ✓ Phase 3 |
+| Build tooling     | Bazel (Bzlmod)                                                          | Unified mono-repo for Rust + Swift + schema codegen                                 | ✓ Locked  |
 
 ## Key Insights
 
 ### Phase 1 (Scaffold)
+
 - **Discovery:** Repo was empty except PLAN.md and agent files.
 - **Decision:** Fix agent count typo in PLAN.md (line 208: unleash goes to commands/, not agents/) before Phase 2.
 - **Blocker:** None.
 - **What worked:** Bazel MODULE.bazel + .bazelrc stubs minimal and clear.
 
 ### Phase 2 (Agent tooling)
+
 - **Discovery:** codebase-memory-mcp + caveman already installed user-globally; cbm-code-discovery-gate + cbm-session-reminder hooks pre-wired. Only rtk + context-mode were net-new.
 - **Decision:** Commit `.claude/agents/`, `.claude/commands/`, `.claude/hooks/`, `.claude/settings.json` — keep only `settings.local.json` and `worktrees/` local. Reviewer gets same toolchain on clone.
 - **Decision:** Doc-freshness hook non-blocking (exit 0 always). Hard fail too noisy given many edits legitimately don't need doc updates.
@@ -32,6 +34,7 @@
 - **What to watch:** `.claude/worktrees/` gitignore rule prevents accidental commit of `/worktree` sandboxes. Re-check in Phase 3 when worktrees used for qa-engineer.
 
 ### Phase 3 (Bazel bootstrap)
+
 - **Decision:** Plan A (rules_xcodeproj 4.0.1) confirmed — `bazel build //apps/ios:NotesXcodeProj` passed, project generated successfully.
 - **Blocker:** rules_xcodeproj BwB (Build with Bazel) mode creates `bazel-out/` paths inside Xcode's DerivedData with 0555 (read-only) permissions by design. Xcode cannot write Info.plist there. Full BwB fix requires replacing XCBBuildService (non-trivial, disproportionate to scope). `Package.swift` `.executableTarget` also attempted and failed — SPM doesn't produce a valid iOS app bundle (nil bundle ID at runtime).
 - **Decision (workaround):** `bazel build //apps/ios:NotesApp` produces a signed `.ipa`; `tools/run-ios-sim.sh` extracts and installs on simulator via `simctl`. Unblocks progress without adding scope. **Future work:** wire a hand-maintained `Notes.xcodeproj` (committed, not Bazel-generated) pointing at `Sources/` for Xcode IDE loop — this is the proper long-term solution for Phase 7+ development ergonomics.
@@ -39,6 +42,7 @@
 - **Tradeoff recorded:** `docs/architecture.md` — iOS build path section.
 
 ### Phase 4 (Shared schema)
+
 - **Schema:** `libs/schema/notes.proto` — `notes.v1` package with `Note`, `ListNotesResponse`, `CreateNoteRequest`, `CreateNoteResponse`.
 - **Rust codegen:** Clean. `rules_rust_prost` 0.70.0 on BCR. One-line `rust_prost_library` target. ~100s cold (prost_build + tonic + h2 compile), cached after. Generated `pub mod notes::v1 { ... }` verified.
 - **Swift codegen blocker:** `rules_proto_grpc_swift` 5.6.0 + its transitive `rules_swift_package_manager` + `rules_go` still reference the old `CcInfo` Starlark symbol. Removed in Bazel 9.x — build fails at analysis. Overriding `rules_go` → 0.60.0 surfaced the same issue one layer deeper (`rules_swift_package_manager+/swiftpkg/internal/generate_modulemap.bzl`). Fighting the override chain was unsustainable.
@@ -48,6 +52,7 @@
 - **Advisor note:** This was a judgment call made without invoking the Opus advisor subagent because the cascade failure was observable directly (two Starlark errors in two different transitive deps, same root cause). Advisor was appropriate for the Phase 3 Plan A/B decision where evidence was mixed; here the signal was unambiguous.
 
 ### Phase 5 (Backend minimal)
+
 - **Surface:** `GET /notes` (list; ascending `created_at_unix`), `POST /notes` (create; 400 on empty body; 201 on success). `InMemoryNotesStore` behind `NotesStore` trait, `RwLock<HashMap>` backing. UUID v4 ids. Unix-seconds timestamps.
 - **Toolchain bring-up gotchas (both fixed in commit 1):**
   - `crate_universe` extension requires a **root `BUILD.bazel`** to locate the workspace path. Root package is empty but required.
@@ -60,9 +65,11 @@
 - **What worked:** rules_rust + Bzlmod + crate_universe is clean once the two bring-up gotchas are past. Zero drift between `Cargo.toml` and Bazel's resolved deps.
 
 ### Phase 5.5 (Reviewer swarm response)
+
 Three-agent review (api-designer, staff-engineer, qa-engineer in worktree) ran end-of-phase per PLAN.md. Surface:
 
 **🔴 fixed this commit:**
+
 - **Unused `From<proto>` impls deleted from `dto.rs`.** Both reviewers flagged them; the `From<CreateNoteResponse>` impl silently returned a sentinel `NoteDto` when the inner `note: Option<Note>` was `None` — a lie at the boundary with no caller. Kept only the live direction (`From<Note> for NoteDto`, `From<Note> for CreateNoteResponseDto`).
 - **JSON error envelope.** New `src/error.rs` with `ApiError` enum + `IntoResponse`. Handlers return `Result<T, ApiError>`; error shape is `{"error":{"code":"VALIDATION_ERROR","message":"..."}}`. Replaces the plain-text `"body must not be empty"` response the iOS client would have gagged on.
 - **`parking_lot::RwLock`.** Drop-in replacement; no lock poisoning, no `.expect` on the lock path. Removes the panic surface that staff-engineer flagged.
@@ -70,6 +77,7 @@ Three-agent review (api-designer, staff-engineer, qa-engineer in worktree) ran e
 - **`created_at_unix` → `created_at_ms` (i64 seconds → milliseconds).** Ripples through `notes.proto`, `Notes.swift`, `store.rs`, `dto.rs`, `services/api/CLAUDE.md`, `libs/schema/CLAUDE.md`, and 6 test call-sites. Needed before Phase 7 freezes the field on the iOS side — seconds lost sort order for burst creates.
 
 **🟡 documented for later:**
+
 - **Max body length.** No cap today; a 10MB body is accepted. Phase 6 hardening adds `tower::limit::RequestBodyLimitLayer` at the router layer, not per-handler.
 - **`GET /notes/:id`.** Phase 5 definition of done is `GET/POST /notes`; add in Phase 7 if the iOS list-to-detail navigation needs it.
 - **O(n) list clone + sort on every read.** Fine for take-home scale; Phase 6 bench can drive a `BTreeMap<(i64, String), Note>` keyed by insertion order if `GET /notes` shows up hot.
@@ -77,6 +85,7 @@ Three-agent review (api-designer, staff-engineer, qa-engineer in worktree) ran e
 - **Async trait story.** Currently sync; swap to native `async fn in traits` (Rust 1.75+) when a SQLx/tokio-postgres impl lands.
 
 ### Phase 6 (Backend hardening)
+
 - **Tower middleware stack:** `ServiceBuilder` with 4 layers: `TraceLayer` (outermost, captures full latency) → `HandleErrorLayer` (503 on load-shed) → `ConcurrencyLimitLayer` (100 in-flight cap) → `TimeoutLayer` (5s per-request). Order is critical: trace sees the full request+error lifecycle; concurrency limit needs error bridge to HandleErrorLayer; timeout is innermost to enforce wall-clock bound.
 - **Tracing init:** `tracing` 0.1 + `tracing-subscriber` 0.3 with `EnvFilter`. Default shows `notes_api=debug,tower_http=debug` HTTP spans. Controlled via `RUST_LOG` env var. `tracing-subscriber::fmt::layer()` emits compact JSON-able logs (config-ready for structured logging ingestion; not needed for take-home but the foundation is in place).
 - **`tower-http` version:** 0.6 matches axum 0.8's resolved dep — no version conflict, resolves cleanly via `cargo generate-lockfile`.
@@ -94,6 +103,7 @@ Three-agent review (api-designer, staff-engineer, qa-engineer in worktree) ran e
 **qa-engineer contribution:** expanded integration tests 3 → 24. Covers malformed JSON, missing/null/non-string `body`, wrong/missing Content-Type, whitespace variants, Unicode (emoji, RTL, CJK), large bodies, unknown-route 404, method-not-allowed 405, concurrent-write safety. 24/24 passing after Phase 5.5 fixes (including the flipped whitespace-trim assertion).
 
 ### Phase 7 (iOS minimal)
+
 - **Scope delivered:** SwiftUI shell replaces `Text("Notes")` stub. `NotesListView` (list + inline compose row + pull-to-refresh) + `NotesViewModel` (`@Observable`, `@MainActor`, state enum `.idle | .loaded`) + `APIClient` (`actor` wrapping `URLSession`) + `APIError` envelope decoder. Schema wired via `//libs/schema:notes_swift_proto` dep on `NotesLib` — `import NotesSchema` gives `Note`, `ListNotesResponse`, `CreateNoteRequest`, `CreateNoteResponse`.
 - **One round-trip verified:** backend on `:3000`, type body → tap Add → `POST /notes` → reload → row in list with relative timestamp. Kill + relaunch re-fetches from backend (confirms data lives server-side, no client cache yet).
 - **ATS exception:** `Info.plist` gains `NSAppTransportSecurity.NSAllowsLocalNetworking = true`. Without it the simulator refuses plaintext HTTP to `127.0.0.1:3000`. Documented in `apps/ios/CLAUDE.md` as "remove when TLS lands."
@@ -108,14 +118,17 @@ Three-agent review (api-designer, staff-engineer, qa-engineer in worktree) ran e
   - Inline compose row instead of navigation sheet. Less view state, fewer files — matches "minimal" bar.
 
 ### Phase 7.5 (reviewer swarm response)
+
 Three-agent review (ux-reviewer, user-flow-auditor, qa-engineer in worktree). Surface:
 
 **🔴 fixed this commit:**
+
 - **`appendingPathComponent` URL bug** (qa-engineer). With a leading-slash path like `"/notes"`, `appendingPathComponent` behavior is undefined — can silently produce `…:3000notes`. Replaced with `URL(string: path, relativeTo: baseURL)?.absoluteURL`. Verified: `URL(string: "/notes", relativeTo: URL(string: "http://127.0.0.1:3000")!)?.absoluteURL` → `http://127.0.0.1:3000/notes`.
 - **Keyboard stays open after submit** (ux-reviewer). After tapping Add or pressing Return, the keyboard remained, covering the newly added row. Added `@FocusState private var fieldFocused: Bool` and `fieldFocused = false` inside `submit()`. One-line fix.
 - **`.idle` rendered "Loading…" indefinitely** (ux-reviewer). When the backend is unreachable on launch, `state` never advances past `.idle`, leaving "Loading…" on screen with no recovery path. Changed to `EmptyView()` — honest, doesn't lie about what's happening. Phase 8 adds `.error` state + retry affordance.
 
 **🟡 documented for Phase 8:**
+
 - **Silent create failure** (user-flow-auditor). `create()` swallows errors after clearing `draft` — user loses a note with zero feedback. Highest Phase 8 priority per user-flow-auditor.
 - **`lineLimit` on NoteRow body** (ux-reviewer). Long notes expand the row unboundedly; add `.lineLimit(3).truncationMode(.tail)`.
 - **Accessibility labels** (ux-reviewer). Add button and timestamp lack VoiceOver context.
@@ -123,6 +136,7 @@ Three-agent review (ux-reviewer, user-flow-auditor, qa-engineer in worktree). Su
 - **`baseURL` hardcoded** — Phase 8 injects per-environment.
 
 **Debunked by swarm:**
+
 - ux-reviewer flagged double-submit race — user-flow-auditor and qa-engineer both confirmed `draft = ""` fires synchronously in `submit()` before the Task, so the button disables before a second tap can land. Not a real issue.
 
 ### Phase 8 (iOS polish)
@@ -145,13 +159,15 @@ Three-agent review (ux-reviewer, user-flow-auditor, qa-engineer in worktree). Su
 
 - **Bazel iOS test simulator gotcha.** Default xctestrunner picks "iPhone 6s Plus" which doesn't exist in iOS 26.x (current Xcode SDK). Requires `--ios_simulator_device="iPhone 16 Pro" --ios_simulator_version=18.4` (stable runtime). Added to `.bazelrc` test defaults so `bazel test //apps/ios:NotesTests` works bare.
 
-- **`module_name = "NotesLib"` required for `@import NotesLib` in tests.** rules_swift defaults module name to `<package_path>_<target>` → `apps_ios_NotesLib`. Added explicit `module_name = "NotesLib"` to the `swift_library` target.
+- **`module_name = "NotesLib"` required for `@import NotesLib` in tests.** rules*swift defaults module name to `<package_path>*<target>`→`apps_ios_NotesLib`. Added explicit `module_name = "NotesLib"`to the`swift_library` target.
 
 **What worked:**
+
 - `@unchecked Sendable` on fakes was the right tradeoff — they mutate deterministically in test context, `nonisolated(unsafe) static var` on `StubURLProtocol.handler` keeps the URLProtocol registration pattern clean.
 - All 7.5 🟡 queue items addressed in Phase 8.
 
 **Advisor notes from Phase 5:**
+
 - Opus advisor call on JSON-wire format (DTOs vs pbjson) → DTOs. Verified correct call: the unused From-impls that shipped in the first cut were the exact dead-code smell the advisor predicted "only hurts if you over-engineer the mirror layer." Deleted them in 5.5.
 - Did not invoke advisor for the review triage — decisions were unambiguous (both reviewers converged on the same 🔴 list).
 
@@ -165,6 +181,31 @@ Three-agent review (ux-reviewer, user-flow-auditor, qa-engineer in worktree). Su
 - **What worked:** punch-list-from-swarm cadence. Three Explore agents ran in parallel in ~30s and surfaced every stale line + path. Pure doc edits, no code risk.
 - **Scope boundary respected:** did not touch retro's `## What Worked` / `## What to Change` finalize sections — those are Phase 10 per PLAN.md:49.
 - **Deferred:** Phase 10 is the coherence pass on this retrospective itself (merge duplicates, collapse reviewer-swarm sub-entries, write final narrative). Phase 11 (bonus) and Phase 12 (fresh-clone verify + `/unleash`) remain.
+
+### Phase 11 (Bonus — attempted, scope-cut)
+
+**What was attempted:** `libs/platform-core` shared Rust crate + UniFFI Android bindings + Jetpack Compose app. Work lives on the `phase-11` branch.
+
+**What shipped on `phase-11`:**
+
+- Platform-core extraction complete: `NotesStore` trait, `InMemoryNotesStore`, `Note` model, `id`/`time`/`validate` helpers moved out of `services/api`. 24 integration tests pass unmodified. Cargo workspace added at root.
+- UniFFI `ffi` feature: `NotesCore` uniffi::Object, `Note` uniffi::Record, 2 host unit tests green.
+- Kotlin bindings generated from macOS dylib via standalone `tools/uniffi-bindgen/`.
+- Android Gradle scaffold: `NotesViewModel` wrapping `NotesCore`, `NotesListScreen` (Compose), `tools/build-android.sh` (cargo-ndk cross-compile recipe).
+
+**Why not merged:**
+
+Three compounding Bazel-ecosystem friction points — same class as Phase 4's `rules_proto_grpc_swift` breakage:
+
+1. **UniFFI proc-macros read `Cargo.toml` via file I/O** — blocked by Bazel's hermetic sandbox. Fix: feature-gate (`ffi` feature) so Bazel compiles without uniffi. Cargo with `--features ffi` builds the cdylib. Workable but adds a two-build-path split.
+
+2. **`uniffi_testing` / `env!("CARGO")`** — the `cli` feature of uniffi drags in `uniffi_testing`, which requires the `CARGO` env var at compile time. Fails in Bazel sandbox. Fix: isolated `tools/uniffi-bindgen/` crate outside the workspace. Also workable.
+
+3. **Android NDK absent on dev machine** — no `cargo-ndk`, no NDK. Cross-compilation and instrumented emulator test not executable. The `tools/build-android.sh` script encodes the recipe; the Kotlin bindings are committed. But the E2E proof (`.so` loads, `NotesCore` round-trips in emulator) was not achievable.
+
+**Decision:** Partial bonus that can't be run end-to-end is a net negative per the plan's gate criterion. Core build on `main` stays fully green. `phase-11` preserves the work for reference.
+
+**What would complete it:** Install NDK (`sdkmanager "ndk;26.3.11579264"`), `cargo install cargo-ndk`, run `./tools/build-android.sh`, verify `./gradlew installDebug` + emulator smoke test. Architecture is sound; gap is toolchain setup, not design.
 
 ## TODO: Fill in as phases progress
 
