@@ -189,12 +189,22 @@ Three-agent review (ux-reviewer, user-flow-auditor, qa-engineer in worktree). Su
 - [x] Bazel + iOS: rules_apple works; rules_xcodeproj BwB had DerivedData permissions issue, fell back to `bazel build` + `simctl` (Phase 3).
 - [x] Bzlmod vs legacy WORKSPACE: Bazel 9.x Bzlmod-default; clean MODULE.bazel (Phase 1, 3).
 - [x] prost + swift-protobuf codegen: prost/rules_rust_prost clean; swift-protobuf chain broken on Bazel 9, scope-cut to hand-written Codables (Phase 4).
-- [ ] tower middleware: concurrency limits, graceful shutdown (Phase 6).
+- [x] tower middleware: concurrency limits, graceful shutdown (Phase 6). Built 4-layer stack (TraceLayer → RequestBodyLimitLayer → HandleErrorLayer → ConcurrencyLimitLayer → TimeoutLayer); order critical for error handling + observability. Bench validated p50/p99 latency under load.
 
 ## What Worked
 
-- (To be updated)
+- **`@Observable` + `@MainActor` iOS state pattern.** Automatic main-thread hop on mutations + SwiftUI observation is ergonomic and catches threading bugs at compile time. 4-case State enum with stale-while-revalidate (keep cached `.loaded` on refresh failure, surface error via `lastLoadError` alert) was the cleanest invariant to express and test.
+- **DTO wire-format layer.** Decoupling serde DTOs from proto schema lets the wire format evolve independently. Hand-written DTOs for 4 messages (~50 lines) cheaper than fighting `pbjson` custom aspects. Symmetric with Swift hand-Codables — same tradeoff accepted on both sides.
+- **NotesStore trait behind Arc.** Sync trait (no `async-trait`) for in-memory ops avoids `Pin<Box<Fut>>` complexity at trait boundary. Swap to native `async fn in traits` (Rust 1.75+) when SQLx lands — straightforward upgrade, zero caller changes.
+- **Tower middleware composition.** Four-layer stack (TraceLayer outermost, TimeoutLayer innermost) is self-documenting. Order matters (trace sees all errors, timeout measures handler work not queueing); the structure forces clarity. ServiceBuilder API makes the composition obvious vs ad-hoc wrapping.
+- **Integration test over unit test.** 24 tests via `tower::ServiceExt::oneshot` hit real handlers + store without a socket. Covers validation, routing, concurrency, Unicode, size limits in one suite. No separate unit-test target needed; every code path reachable from HTTP is exercised.
+- **Reviewer swarm cadence (Phases 5.5, 7.5, 8.5).** 3-agent triage (2–3 personas per checkpoint) surfaced unused dead code (Phase 5.5 `From<proto>` impls), accessibility gaps (Phase 7.5 NoteRow), and concurrency bugs (Phase 6 lock-scope). Swarm findings were high-signal; false positives rare.
+- **Punch-list audits (Phase 9).** Three Explore agents in parallel surfaced every stale line in docs. Cost: ~30s, zero risk. Triggered test coverage expansion (APIClient `.decoding`, ViewModel non-APIError, NotesListView state, Rust 413 boundary).
 
 ## What to Change
 
-- (To be updated)
+- **Swift hand-Codables don't scale.** 50 lines for 4 messages is fine; past ~10–15 messages, maintaining a manual mirror alongside proto is error-prone. Revisit swift-protobuf chain (rules_proto_grpc_swift on Bazel <9.0) or invest in a code-generation wrapper that's less fragile than hand-mirroring.
+- **`.transport` error path hard to unit-test.** URLSession network failures are context-dependent (timeout config, network state, DNS). Mocking at the URLProtocol level is brittle. Consider: integration tests with a real URLSession against a local stub HTTP server, or a higher-level test double that doesn't require stubs at all.
+- **Middleware behavior assertions missing.** 413/503/408 return codes are wired (RequestBodyLimitLayer, ConcurrencyLimitLayer, TimeoutLayer) but not explicitly asserted in tests. Plan Phase 10+ bench upgrade to include failure-path latency (e.g., p99 under concurrency limit) + explicit status-code coverage for limit/timeout branches.
+- **ViewInspector snapshot tests valuable for SwiftUI.** NotesListView's 5-case state switch, alert bindings, draft-preservation logic, and NoteRow formatting are untested. Snapshots would catch view regressions without brittle frame/coordinate assertions. Worth the setup cost for Phase 11+ UI work.
+- **Golden-file JSON schema round-trip.** Swift Codables mirror proto fields via CodingKeys. If Swift's `created_at_ms` drifts from Rust's snake_case, apps break silently at runtime. A golden JSON fixture asserted from both sides (Rust encode → Swift decode) would catch schema skew.
