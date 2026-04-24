@@ -8,10 +8,12 @@
 - Model validation — body length, timestamp fields
 - Location: `services/api/src/tests/` or inline via `#[cfg(test)]`
 
-### iOS (Phase 8)
-- NotesViewModel — observe state updates on successful POST
-- APIClient — mock network responses
-- Location: `apps/ios/Tests/` (XCTest)
+### iOS (Phase 8 — done)
+- `NotesViewModelTests` — 6 cases: load from idle, error no-cache, error keeps-cache, create success, create error, empty-body guard
+- `APIClientTests` + `APIErrorUserMessageTests` — URL composition, list decode, create decode, server error envelope, unknown 500, all `userMessage` cases
+- `FakeNotesAPI` / `FailingNotesAPI` / `SwitchingNotesAPI` for ViewModel tests; `StubURLProtocol` for `APIClient` tests
+- Location: `apps/ios/Tests/`
+- Run: `bazel test //apps/ios:NotesTests`
 
 ## Integration Tests
 
@@ -21,11 +23,8 @@ Single integration test hitting the live router:
 - GET `/notes` → returns list with posted note
 - Location: `services/api/tests/integration_test.rs`
 
-### iOS (Phase 8)
-One round-trip XCTest:
-- Mock APIClient or point to local backend on :3000
-- Create note, fetch list, verify in UI
-- Location: `apps/ios/Tests/integration/`
+### iOS
+Manual E2E round-trip via simulator + live backend (see §E2E below). No separate integration test suite; `StubURLProtocol` covers the network boundary.
 
 ## E2E (Manual)
 
@@ -47,13 +46,13 @@ Requires `oha`: `brew install oha`. Measures end-to-end HTTP latency including t
 
 ## Failure Modes
 
-- Backend unreachable → iOS shows error state (Phase 8)
-- Empty list → iOS shows empty state (Phase 8)
-- Invalid body → backend rejects, iOS surface error (Phase 6)
+- Backend unreachable → iOS shows `.error` inline Retry row (no cache) or `lastLoadError` alert (stale cache kept)
+- Empty list → iOS shows "No notes yet" placeholder
+- Invalid body → backend 400; iOS client guards trim+empty before send
 
 ## TODO
 
 - [x] Flesh out unit tests per component (Phase 5–7)
 - [x] Write integration test (Phase 5)
 - [x] Add load test script (Phase 6)
-- [ ] XCTest harness for iOS (Phase 8)
+- [x] XCTest harness for iOS (Phase 8)

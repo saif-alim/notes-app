@@ -1,10 +1,11 @@
-load("@rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_apple//apple:ios.bzl", "ios_application", "ios_unit_test")
 load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_xcodeproj//xcodeproj:defs.bzl", "top_level_target", "xcodeproj")
 
 swift_library(
     name = "NotesLib",
     srcs = glob(["Sources/**/*.swift"]),
+    module_name = "NotesLib",
     tags = ["manual"],
     visibility = ["//visibility:public"],
     deps = ["//libs/schema:notes_swift_proto"],
@@ -19,6 +20,25 @@ ios_application(
     tags = ["manual"],
     visibility = ["//visibility:public"],
     deps = [":NotesLib"],
+)
+
+swift_library(
+    name = "NotesTestsLib",
+    srcs = glob(["Tests/**/*.swift"]),
+    deps = [
+        ":NotesLib",
+        "//libs/schema:notes_swift_proto",
+    ],
+    testonly = True,
+    tags = ["manual"],
+)
+
+ios_unit_test(
+    name = "NotesTests",
+    deps = [":NotesTestsLib"],
+    minimum_os_version = "17.0",
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
 )
 
 xcodeproj(

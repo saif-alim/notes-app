@@ -22,6 +22,7 @@ public struct NotesListView: View {
                             .onSubmit(submit)
                         Button("Add", action: submit)
                             .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .accessibilityLabel("Add note")
                     }
                 }
                 Section("Notes") {
@@ -31,6 +32,32 @@ public struct NotesListView: View {
             .navigationTitle("Notes")
             .task { await viewModel.load() }
             .refreshable { await viewModel.load() }
+            .alert(
+                "Couldn't save note",
+                isPresented: Binding(
+                    get: { viewModel.lastCreateError != nil },
+                    set: { if !$0 { viewModel.lastCreateError = nil } }
+                ),
+                presenting: viewModel.lastCreateError
+            ) { _ in
+                Button("Retry") { submit() }
+                Button("Dismiss", role: .cancel) { viewModel.lastCreateError = nil }
+            } message: { error in
+                Text(error.userMessage)
+            }
+            .alert(
+                "Couldn't refresh notes",
+                isPresented: Binding(
+                    get: { viewModel.lastLoadError != nil },
+                    set: { if !$0 { viewModel.lastLoadError = nil } }
+                ),
+                presenting: viewModel.lastLoadError
+            ) { _ in
+                Button("Retry") { Task { await viewModel.load() } }
+                Button("Dismiss", role: .cancel) { viewModel.lastLoadError = nil }
+            } message: { error in
+                Text(error.userMessage)
+            }
         }
     }
 
@@ -39,20 +66,31 @@ public struct NotesListView: View {
         switch viewModel.state {
         case .idle:
             EmptyView()
+        case .loading:
+            ProgressView("Loading…")
         case .loaded(let notes) where notes.isEmpty:
             Text("No notes yet").foregroundStyle(.secondary)
         case .loaded(let notes):
             ForEach(notes, id: \.id) { note in
                 NoteRow(note: note)
             }
+        case .error(let error):
+            VStack(alignment: .leading, spacing: 8) {
+                Text(error.userMessage).foregroundStyle(.secondary)
+                Button("Retry") { Task { await viewModel.load() } }
+            }
         }
     }
 
     private func submit() {
         let body = draft
-        draft = ""
         fieldFocused = false
-        Task { await viewModel.create(body: body) }
+        Task {
+            await viewModel.create(body: body)
+            if viewModel.lastCreateError == nil {
+                draft = ""
+            }
+        }
     }
 }
 
@@ -68,12 +106,17 @@ private struct NoteRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(note.body)
-            Text(Self.formatter.localizedString(
+                .lineLimit(3)
+                .truncationMode(.tail)
+            let relativeDate = Self.formatter.localizedString(
                 for: Date(timeIntervalSince1970: Double(note.createdAtMs) / 1000),
                 relativeTo: Date()
-            ))
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            )
+            Text(relativeDate)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Created \(relativeDate)")
         }
+        .accessibilityElement(children: .combine)
     }
 }

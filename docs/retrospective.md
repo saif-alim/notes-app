@@ -125,6 +125,32 @@ Three-agent review (ux-reviewer, user-flow-auditor, qa-engineer in worktree). Su
 **Debunked by swarm:**
 - ux-reviewer flagged double-submit race — user-flow-auditor and qa-engineer both confirmed `draft = ""` fires synchronously in `submit()` before the Task, so the button disables before a second tap can land. Not a real issue.
 
+### Phase 8 (iOS polish)
+
+**Scope delivered:** 4-case State enum, stale-while-revalidate cache, create/load error alerts, `lineLimit(3)`, a11y labels, `NotesAPI` protocol for DI, `NOTES_API_BASE_URL` env injection, XCTest harness (8 tests across 2 files + TestDoubles).
+
+**Key decisions:**
+
+- **`NotesAPI` protocol over direct `APIClient` in ViewModel.** Introduced `public protocol NotesAPI: Sendable` — lets ViewModel tests use `FakeNotesAPI` with deterministic control flow, no `URLProtocol` dance. `APIClient` conforms; no API surface change for app code.
+
+- **Stale-while-revalidate via associated-value `State`.** "Cache" = the `[Note]` array already living in `.loaded(notes)`. On pull-to-refresh failure, keep `.loaded`, set `lastLoadError` → alert. No separate cache struct needed. Phase 8 confirmed this is the simplest correct design; revisit only if offline persistence (disk) lands in Phase 11+.
+
+- **`lastCreateError` / `lastLoadError` separate from State enum.** Draft-preservation on create failure required keeping `body` in the view; surfacing as `.error` in State would clobber the list. Two small optional properties were cleaner than a compound state case. Reviewer-swarm pre-empted this: acknowledged as potential 🔴 "two sources of truth" — surfaced for Phase 8.5 if naive-tester or junior-dev flag it.
+
+- **Draft cleared only on create success.** Inverted Phase 7 behavior (draft cleared optimistically before await). Phase 8: `draft = ""` only if `lastCreateError == nil` after await. Preserves user's text for retry.
+
+- **`baseURL` via `ProcessInfo.environment`.** Simplest injection without scheme files. `NOTES_API_BASE_URL=http://host:port ./tools/run-ios-sim.sh` works. XCTest uses `StubURLProtocol` directly, not env var.
+
+- **`ios_unit_test` target greenfield.** No existing ios test infrastructure. `swift_library("NotesTestsLib")` + `ios_unit_test("NotesTests")` added. `testonly = True` prevents production code depending on test doubles.
+
+- **Bazel iOS test simulator gotcha.** Default xctestrunner picks "iPhone 6s Plus" which doesn't exist in iOS 26.x (current Xcode SDK). Requires `--ios_simulator_device="iPhone 16 Pro" --ios_simulator_version=18.4` (stable runtime). Added to `.bazelrc` test defaults so `bazel test //apps/ios:NotesTests` works bare.
+
+- **`module_name = "NotesLib"` required for `@import NotesLib` in tests.** rules_swift defaults module name to `<package_path>_<target>` → `apps_ios_NotesLib`. Added explicit `module_name = "NotesLib"` to the `swift_library` target.
+
+**What worked:**
+- `@unchecked Sendable` on fakes was the right tradeoff — they mutate deterministically in test context, `nonisolated(unsafe) static var` on `StubURLProtocol.handler` keeps the URLProtocol registration pattern clean.
+- All 7.5 🟡 queue items addressed in Phase 8.
+
 **Advisor notes from Phase 5:**
 - Opus advisor call on JSON-wire format (DTOs vs pbjson) → DTOs. Verified correct call: the unused From-impls that shipped in the first cut were the exact dead-code smell the advisor predicted "only hurts if you over-engineer the mirror layer." Deleted them in 5.5.
 - Did not invoke advisor for the review triage — decisions were unambiguous (both reviewers converged on the same 🔴 list).
@@ -137,7 +163,7 @@ Three-agent review (ux-reviewer, user-flow-auditor, qa-engineer in worktree). Su
 - [ ] **Phase 5 (Backend minimal):** Axum ergonomics, Tokio learning curve, NotesStore trait design.
 - [x] **Phase 6 (Backend hardening):** tower middleware tuning, tracing setup, bench insights. Reviewer swarm fixes applied (HandleErrorLayer, RequestBodyLimitLayer, lock scope).
 - [x] **Phase 7 (iOS minimal):** SwiftUI state management (`@Observable` + `@MainActor`), APIClient pattern (actor), codegen integration (`import NotesSchema`). Reviewer swarm pending.
-- [ ] **Phase 8 (iOS polish):** Cache design, error state UX.
+- [x] **Phase 8 (iOS polish):** Cache design, error state UX.
 - [ ] **Phase 9 (Docs pass):** README clarity, architecture diagram completeness, test-plan accuracy.
 - [ ] **Phase 12 (Final):** What would an interviewer probe first? Unfamiliar territory conquered?
 

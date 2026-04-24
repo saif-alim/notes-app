@@ -1,14 +1,19 @@
 import Foundation
 import NotesSchema
 
-public actor APIClient {
+public actor APIClient: NotesAPI {
     private let baseURL: URL
     private let session: URLSession
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
+    public static var defaultBaseURL: URL {
+        ProcessInfo.processInfo.environment["NOTES_API_BASE_URL"]
+            .flatMap(URL.init(string:)) ?? URL(string: "http://127.0.0.1:3000")!
+    }
+
     public init(
-        baseURL: URL = URL(string: "http://127.0.0.1:3000")!,
+        baseURL: URL = APIClient.defaultBaseURL,
         session: URLSession = .shared
     ) {
         self.baseURL = baseURL

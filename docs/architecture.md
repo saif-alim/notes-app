@@ -48,9 +48,18 @@ DTO layer decouples the wire format from proto-generated types — see `docs/ret
 
 ## iOS State Pattern
 
-`@Observable` (Observation framework, iOS 17+) + MVVM. ViewModel is `@MainActor` so all state mutations hop onto the main thread before SwiftUI observes them. Phase 7 state enum is minimal: `.idle` | `.loaded([Note])`. Phase 8 adds `.loading` and `.error(APIError)` for polished UX.
+`@Observable` (Observation framework, iOS 17+) + MVVM. ViewModel is `@MainActor` so all state mutations hop onto the main thread before SwiftUI observes them.
 
-`APIClient` is an `actor` — safe concurrent calls without a lock, and composable with `async`/`await` throughout. `baseURL` is hardcoded `http://127.0.0.1:3000` in Phase 7; Phase 8 will inject per-environment.
+**4-case State enum (Phase 8):**
+```
+.idle → .loading → .loaded([Note])
+                ↘ .error(APIError)
+```
+Stale-while-revalidate: on pull-to-refresh with cached data, `.loaded` stays visible; network failures set `lastLoadError` → alert. Create failures set `lastCreateError` → alert; draft preserved for retry.
+
+`NotesAPI` protocol (`Sendable`) decouples `NotesViewModel` from `URLSession` — allows deterministic `FakeNotesAPI` in XCTests without `URLProtocol` stubs.
+
+`APIClient` is an `actor` — safe concurrent calls without a lock. `baseURL` reads `NOTES_API_BASE_URL` env var; falls back to `http://127.0.0.1:3000`.
 
 ATS: `Info.plist` sets `NSAppTransportSecurity.NSAllowsLocalNetworking` so the simulator permits plaintext HTTP to `127.0.0.1`. Remove when the app talks to TLS.
 

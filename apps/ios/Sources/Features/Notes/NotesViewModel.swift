@@ -7,22 +7,45 @@ import NotesSchema
 public final class NotesViewModel {
     public enum State: Equatable {
         case idle
+        case loading
         case loaded([Note])
+        case error(APIError)
     }
 
     public private(set) var state: State = .idle
-    private let api: APIClient
+    public var lastLoadError: APIError? = nil
+    public var lastCreateError: APIError? = nil
 
-    public init(api: APIClient) {
+    private let api: any NotesAPI
+
+    public init(api: any NotesAPI) {
         self.api = api
     }
 
     public func load() async {
-        do {
-            let notes = try await api.listNotes()
-            state = .loaded(notes)
-        } catch {
-            // Phase 8 adds .error state + user-facing surface.
+        switch state {
+        case .loaded:
+            // Stale-while-revalidate: keep cached rows, surface errors via lastLoadError.
+            do {
+                let notes = try await api.listNotes()
+                state = .loaded(notes)
+                lastLoadError = nil
+            } catch let error as APIError {
+                lastLoadError = error
+            } catch {
+                lastLoadError = .transport(error.localizedDescription)
+            }
+        default:
+            state = .loading
+            do {
+                let notes = try await api.listNotes()
+                state = .loaded(notes)
+                lastLoadError = nil
+            } catch let error as APIError {
+                state = .error(error)
+            } catch {
+                state = .error(.transport(error.localizedDescription))
+            }
         }
     }
 
@@ -31,9 +54,12 @@ public final class NotesViewModel {
         guard !trimmed.isEmpty else { return }
         do {
             _ = try await api.createNote(body: trimmed)
+            lastCreateError = nil
             await load()
+        } catch let error as APIError {
+            lastCreateError = error
         } catch {
-            // Phase 8 adds .error state + user-facing surface.
+            lastCreateError = .transport(error.localizedDescription)
         }
     }
 }

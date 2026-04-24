@@ -1,3 +1,6 @@
 # Bzlmod is the default in Bazel 8+; no flag needed
 build --verbose_failures
 test  --test_output=errors
+# iOS simulator: default to a device that exists on iOS 18.4 (stable runtime)
+test  --ios_simulator_device="iPhone 16 Pro"
+test  --ios_simulator_version=18.4

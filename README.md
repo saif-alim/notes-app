@@ -46,8 +46,6 @@ bazel test //apps/ios/...      # iOS tests only
 - In-memory storage only (Phase 4+: pluggable to SQLite/Postgres)
 - iOS app is simulator-only (device testing out of scope)
 - iOS dev loop uses `tools/run-ios-sim.sh` (Bazel build + simctl); Xcode indexing via `bazel run //apps/ios:NotesXcodeProj`
-- No loading/error UI states yet (Phase 8)
-- No client-side cache (Phase 8)
 
 ## Documentation
 
