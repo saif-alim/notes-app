@@ -24,7 +24,7 @@ Notes app: SwiftUI iOS client + Rust/Axum backend + shared .proto schema, built 
 
 ```bash
 bazel build //...               # build all
-bazel run //services/api        # start backend on :3000
+bazel run //services/api:notes_api   # start backend on :3000
 bazel test //...                # run all tests
 
 # iOS: ./tools/run-ios-sim.sh   (builds via Bazel, installs on simulator)
@@ -40,9 +40,9 @@ bazel test //...                # run all tests
 
 ## Per-area navigation
 
-- `services/api/CLAUDE.md` (Phase 5) — routes, handlers, NotesStore, test commands
-- `apps/ios/CLAUDE.md` (Phase 7) — views, viewmodels, networking, file layout
-- `libs/schema/CLAUDE.md` (Phase 4) — how to add a message, codegen wiring
+- `services/api/CLAUDE.md` — routes, handlers, NotesStore, test commands
+- `apps/ios/CLAUDE.md` — views, viewmodels, networking, file layout
+- `libs/schema/CLAUDE.md` — how to add a message, codegen wiring
 
 ## Docs at a glance
 

@@ -93,6 +93,20 @@ Three-agent review (api-designer, staff-engineer, qa-engineer in worktree) ran e
 
 **qa-engineer contribution:** expanded integration tests 3 → 24. Covers malformed JSON, missing/null/non-string `body`, wrong/missing Content-Type, whitespace variants, Unicode (emoji, RTL, CJK), large bodies, unknown-route 404, method-not-allowed 405, concurrent-write safety. 24/24 passing after Phase 5.5 fixes (including the flipped whitespace-trim assertion).
 
+### Phase 7 (iOS minimal)
+- **Scope delivered:** SwiftUI shell replaces `Text("Notes")` stub. `NotesListView` (list + inline compose row + pull-to-refresh) + `NotesViewModel` (`@Observable`, `@MainActor`, state enum `.idle | .loaded`) + `APIClient` (`actor` wrapping `URLSession`) + `APIError` envelope decoder. Schema wired via `//libs/schema:notes_swift_proto` dep on `NotesLib` — `import NotesSchema` gives `Note`, `ListNotesResponse`, `CreateNoteRequest`, `CreateNoteResponse`.
+- **One round-trip verified:** backend on `:3000`, type body → tap Add → `POST /notes` → reload → row in list with relative timestamp. Kill + relaunch re-fetches from backend (confirms data lives server-side, no client cache yet).
+- **ATS exception:** `Info.plist` gains `NSAppTransportSecurity.NSAllowsLocalNetworking = true`. Without it the simulator refuses plaintext HTTP to `127.0.0.1:3000`. Documented in `apps/ios/CLAUDE.md` as "remove when TLS lands."
+- **State pattern:** `@Observable` + `@MainActor` on the class means mutations hop to main automatically. `@State private var viewModel` in the view holds a strong reference and observes. Phase 7 intentionally has no `.loading` or `.error` case — the state enum stays 2-case to keep the view switch trivial; Phase 8 expands to 4-case.
+- **APIClient as `actor`:** no shared-state locks, composable with `async`/`await`. Errors flow through typed `APIError` (`.validation` | `.server` | `.decoding` | `.transport`) so Phase 8 can pattern-match into user-facing messages without re-shaping.
+- **`baseURL` hardcoded:** `http://127.0.0.1:3000` default in `APIClient.init`. Phase 8 injects per-environment (debug vs release vs UI-test).
+- **Build green:** `bazel build //apps/ios:NotesApp` 4.3s after cache warm. Swift + schema both compile clean, no warnings.
+- **Phase 7 scope cuts (documented, deferred to Phase 8):**
+  - No XCTest harness. PLAN.md §Phase 7 says "one round-trip" — manual E2E suffices; `test-plan.md` updated to move iOS unit/integration tests to Phase 8.
+  - No error UI. Current `NotesViewModel.load()`/`create()` catch-and-swallow. Phase 8 adds `.error(APIError)` state + alert.
+  - No offline cache. Kill-the-backend → empty list. Phase 8 adds in-memory cache.
+  - Inline compose row instead of navigation sheet. Less view state, fewer files — matches "minimal" bar.
+
 **Advisor notes from Phase 5:**
 - Opus advisor call on JSON-wire format (DTOs vs pbjson) → DTOs. Verified correct call: the unused From-impls that shipped in the first cut were the exact dead-code smell the advisor predicted "only hurts if you over-engineer the mirror layer." Deleted them in 5.5.
 - Did not invoke advisor for the review triage — decisions were unambiguous (both reviewers converged on the same 🔴 list).
@@ -104,7 +118,7 @@ Three-agent review (api-designer, staff-engineer, qa-engineer in worktree) ran e
 - [x] **Phase 5 + 5.5 (Backend minimal + reviewer response):** Done.
 - [ ] **Phase 5 (Backend minimal):** Axum ergonomics, Tokio learning curve, NotesStore trait design.
 - [x] **Phase 6 (Backend hardening):** tower middleware tuning, tracing setup, bench insights. Reviewer swarm fixes applied (HandleErrorLayer, RequestBodyLimitLayer, lock scope).
-- [ ] **Phase 7 (iOS minimal):** SwiftUI state management, APIClient pattern, codegen integration.
+- [x] **Phase 7 (iOS minimal):** SwiftUI state management (`@Observable` + `@MainActor`), APIClient pattern (actor), codegen integration (`import NotesSchema`). Reviewer swarm pending.
 - [ ] **Phase 8 (iOS polish):** Cache design, error state UX.
 - [ ] **Phase 9 (Docs pass):** README clarity, architecture diagram completeness, test-plan accuracy.
 - [ ] **Phase 12 (Final):** What would an interviewer probe first? Unfamiliar territory conquered?

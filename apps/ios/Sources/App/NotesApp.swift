@@ -2,15 +2,11 @@ import SwiftUI
 
 @main
 struct NotesApp: App {
+    @State private var viewModel = NotesViewModel(api: APIClient())
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            NotesListView(viewModel: viewModel)
         }
-    }
-}
-
-struct ContentView: View {
-    var body: some View {
-        Text("Notes")
     }
 }

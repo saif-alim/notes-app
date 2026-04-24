@@ -33,16 +33,26 @@
 
 ## Request Path: iOS → Axum → Store
 
-1. User taps "Add note".
-2. SwiftUI posts `POST /notes { body: "..." }` via APIClient (Phase 7).
-3. Axum `create_note` handler (in `services/api/src/routes.rs`) receives the `CreateNoteRequestDto`, validates non-empty body, calls `NotesStore::create(body)`.
-4. `InMemoryNotesStore` generates a UUID + Unix-seconds timestamp, inserts into `RwLock<HashMap<String, Note>>`, returns the `Note`.
-5. Handler converts `Note` → `CreateNoteResponseDto` via `From` impl, serializes as JSON with 201 Created.
-6. `NotesViewModel` (Phase 7) updates state, SwiftUI re-renders.
+1. User types into the compose `TextField` in `NotesListView` and taps "Add".
+2. `NotesListView` calls `NotesViewModel.create(body:)` (`@MainActor`, `@Observable`).
+3. ViewModel trims and guards empty, then calls `APIClient.createNote(body:)` — an `actor` wrapping `URLSession`. Request: `POST http://127.0.0.1:3000/notes` with `application/json` body `{"body":"..."}`.
+4. Axum `create_note` handler (`services/api/src/routes.rs`) receives `CreateNoteRequestDto`, re-validates non-empty, calls `NotesStore::create(body)`.
+5. `InMemoryNotesStore` generates a UUID + millisecond Unix timestamp (`created_at_ms`), inserts into `parking_lot::RwLock<HashMap<String, Note>>`, returns the `Note`.
+6. Handler converts `Note` → `CreateNoteResponseDto` via `From` impl, serializes as JSON with 201 Created.
+7. `APIClient` decodes `CreateNoteResponse` from `NotesSchema`; on non-2xx decodes `{"error":{"code","message"}}` into `APIError.server`.
+8. ViewModel re-calls `load()` to refresh the list; `state = .loaded(notes)` triggers SwiftUI re-render.
 
-`GET /notes` flows the same way minus the create step; `list_notes` handler calls `NotesStore::list()` (sorted by `created_at_unix`), converts to `ListNotesResponseDto`, returns 200.
+`GET /notes` flows the same way minus the create step: `list_notes` handler calls `NotesStore::list()` (sorted by `created_at_ms` desc), converts to `ListNotesResponseDto`, returns 200. `APIClient.listNotes()` decodes `ListNotesResponse` into `[Note]`.
 
 DTO layer decouples the wire format from proto-generated types — see `docs/retrospective.md` Phase 5 entry.
+
+## iOS State Pattern
+
+`@Observable` (Observation framework, iOS 17+) + MVVM. ViewModel is `@MainActor` so all state mutations hop onto the main thread before SwiftUI observes them. Phase 7 state enum is minimal: `.idle` | `.loaded([Note])`. Phase 8 adds `.loading` and `.error(APIError)` for polished UX.
+
+`APIClient` is an `actor` — safe concurrent calls without a lock, and composable with `async`/`await` throughout. `baseURL` is hardcoded `http://127.0.0.1:3000` in Phase 7; Phase 8 will inject per-environment.
+
+ATS: `Info.plist` sets `NSAppTransportSecurity.NSAllowsLocalNetworking` so the simulator permits plaintext HTTP to `127.0.0.1`. Remove when the app talks to TLS.
 
 ## Schema Story
 
@@ -111,4 +121,4 @@ xcrun simctl launch booted com.notes.app
 
 - [ ] Component diagram visual (ASCII OK for now)
 - [ ] Request flow diagram (mermaid or ASCII)
-- [ ] Filled in at end of Phase 5 (backend) and Phase 7 (iOS)
+- [x] Filled in at end of Phase 5 (backend) and Phase 7 (iOS)

@@ -8,7 +8,7 @@
 - Model validation — body length, timestamp fields
 - Location: `services/api/src/tests/` or inline via `#[cfg(test)]`
 
-### iOS
+### iOS (Phase 8)
 - NotesViewModel — observe state updates on successful POST
 - APIClient — mock network responses
 - Location: `apps/ios/Tests/` (XCTest)
@@ -21,7 +21,7 @@ Single integration test hitting the live router:
 - GET `/notes` → returns list with posted note
 - Location: `services/api/tests/integration_test.rs`
 
-### iOS
+### iOS (Phase 8)
 One round-trip XCTest:
 - Mock APIClient or point to local backend on :3000
 - Create note, fetch list, verify in UI
@@ -53,7 +53,7 @@ Requires `oha`: `brew install oha`. Measures end-to-end HTTP latency including t
 
 ## TODO
 
-- [ ] Flesh out unit tests per component (Phase 5–7)
-- [ ] Write integration test (Phase 5)
-- [ ] Add load test script (Phase 6)
-- [ ] XCTest harness for iOS (Phase 7)
+- [x] Flesh out unit tests per component (Phase 5–7)
+- [x] Write integration test (Phase 5)
+- [x] Add load test script (Phase 6)
+- [ ] XCTest harness for iOS (Phase 8)

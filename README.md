@@ -13,7 +13,7 @@ Notes app: SwiftUI iOS client + Rust/Axum backend + shared .proto schema, built 
 bazel build //...
 
 # Run backend server (starts on :3000)
-bazel run //services/api
+bazel run //services/api:notes_api
 
 # Run iOS app in simulator
 ./tools/run-ios-sim.sh
@@ -44,8 +44,10 @@ bazel test //apps/ios/...      # iOS tests only
 ## Known Limitations
 
 - In-memory storage only (Phase 4+: pluggable to SQLite/Postgres)
-- iOS app is simulator-only in Phase 1–2 (device testing in Phase 3+)
-- iOS dev loop uses `tools/run-ios-sim.sh` (Bazel build + simctl); Xcode IDE integration planned for Phase 7
+- iOS app is simulator-only (device testing out of scope)
+- iOS dev loop uses `tools/run-ios-sim.sh` (Bazel build + simctl); Xcode indexing via `bazel run //apps/ios:NotesXcodeProj`
+- No loading/error UI states yet (Phase 8)
+- No client-side cache (Phase 8)
 
 ## Documentation
 

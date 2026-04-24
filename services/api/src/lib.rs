@@ -1,10 +1,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::{http::StatusCode, routing::get, Router};
+use axum::{routing::get, Router};
 use tower::ServiceBuilder;
 use tower::limit::ConcurrencyLimitLayer;
-use tower::util::HandleErrorLayer;
 use tower_http::{limit::RequestBodyLimitLayer, timeout::TimeoutLayer, trace::TraceLayer};
 
 pub mod dto;
@@ -29,9 +28,6 @@ pub fn create_router(store: Arc<dyn NotesStore>) -> Router {
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
                 .layer(RequestBodyLimitLayer::new(MAX_BODY_BYTES))
-                .layer(HandleErrorLayer::new(|_: tower::BoxError| async {
-                    StatusCode::SERVICE_UNAVAILABLE
-                }))
                 .layer(ConcurrencyLimitLayer::new(MAX_CONCURRENT))
                 .layer(TimeoutLayer::new(Duration::from_secs(REQUEST_TIMEOUT_SECS)))
         )
